@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0f5b4d" />
+  <title>Reka Ruang — Project Control</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <section id="setupScreen" class="gate-screen hidden">
+    <div class="gate-card">
+      <div class="brand big"><div class="brand-mark">RR</div><div><strong>Reka Ruang</strong><span>Supabase Setup</span></div></div>
+      <h1>Hubungkan Supabase</h1>
+      <p>Masukkan Project URL dan Publishable/Anon Key. Data ini disimpan di browser ini. Untuk deployment permanen, isi juga <code>config.js</code>.</p>
+      <form id="setupForm" class="stack">
+        <label>Supabase Project URL<input class="input" name="url" placeholder="https://xxxx.supabase.co" required></label>
+        <label>Publishable / Anon Key<textarea class="input" name="key" rows="4" required></textarea></label>
+        <button class="btn primary" type="submit">Simpan & Hubungkan</button>
+      </form>
+    </div>
+  </section>
+
+  <section id="loginScreen" class="gate-screen hidden">
+    <div class="gate-card">
+      <div class="brand big"><div class="brand-mark">RR</div><div><strong>Reka Ruang</strong><span>Project Control</span></div></div>
+      <h1>Login Tim</h1>
+      <p>Gunakan akun yang dibuat di Supabase Authentication.</p>
+      <form id="loginForm" class="stack">
+        <label>Email<input class="input" name="email" type="email" required></label>
+        <label>Password<input class="input" name="password" type="password" required></label>
+        <button class="btn primary" type="submit">Masuk</button>
+      </form>
+      <button id="changeConnectionBtn" class="link-btn gate-link">Ganti koneksi Supabase</button>
+    </div>
+  </section>
+
+  <div id="appShell" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">RR</div><div><strong>Reka Ruang</strong><span>Project Control</span></div></div>
+      <nav>
+        <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+        <button class="nav-btn" data-view="projects">Proyek</button>
+        <button class="nav-btn" data-view="finance">Keuangan</button>
+        <button class="nav-btn" data-view="documents">Dokumen</button>
+        <button class="nav-btn" data-view="settings">Pengaturan</button>
+      </nav>
+      <div class="sidebar-foot">
+        <span id="userEmail" class="user-email"></span>
+        <button id="logoutBtn" class="btn ghost full">Keluar</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div><h1 id="pageTitle">Dashboard</h1><p id="pageSubtitle">Ringkasan proyek, progress, dan arus keuangan.</p></div>
+        <button id="newProjectBtn" class="btn primary">+ Proyek Baru</button>
+      </header>
+
+      <section id="dashboardView" class="view active">
+        <div id="metricCards" class="metrics"></div>
+        <div class="grid-2">
+          <section class="panel"><div class="panel-head"><h2>Proyek Aktif</h2><button class="link-btn" data-go="projects">Lihat semua</button></div><div id="recentProjects"></div></section>
+          <section class="panel"><div class="panel-head"><h2>Aktivitas Terbaru</h2></div><div id="recentActivity"></div></section>
+        </div>
+        <section class="panel"><div class="panel-head"><div><h2>Pipeline Project</h2><p class="muted">Jumlah proyek pada setiap tahapan kerja.</p></div></div><div id="pipelineBoard" class="pipeline-board"></div></section>
+      </section>
+
+      <section id="projectsView" class="view">
+        <div class="toolbar">
+          <input id="projectSearch" class="input" placeholder="Cari proyek, client, kode, lokasi..." />
+          <select id="projectStatusFilter" class="input"><option value="">Semua tahap</option><option>Pengajuan</option><option>Deal</option><option>Design AI</option><option>Design Fix</option><option>Pengerjaan</option><option>Pemasangan</option><option>Selesai</option><option>Hold</option></select>
+        </div>
+        <div id="projectsList" class="project-grid"></div>
+      </section>
+
+      <section id="financeView" class="view">
+        <div id="financeSummary" class="metrics"></div>
+        <section class="panel"><div class="panel-head"><h2>Semua Transaksi</h2></div><div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Proyek</th><th>Jenis</th><th>Kategori</th><th>Keterangan</th><th>Nominal</th></tr></thead><tbody id="allTransactionsBody"></tbody></table></div></section>
+      </section>
+
+      <section id="documentsView" class="view">
+        <section class="panel"><div class="panel-head"><div><h2>Generator Dokumen</h2><p class="muted">Invoice, Proposal Penawaran, dan SPK mengambil data dari proyek.</p></div></div><div class="doc-generator-grid"><select id="docProjectSelect" class="input"><option value="">Pilih proyek...</option></select><select id="docTypeSelect" class="input"><option value="invoice">Invoice</option><option value="proposal">Proposal Penawaran</option><option value="spk">SPK</option></select><button id="openDocBuilderBtn" class="btn primary">Buat Dokumen</button></div></section>
+        <section class="panel"><div class="panel-head"><h2>Riwayat Dokumen</h2></div><div id="documentsList"></div></section>
+      </section>
+
+      <section id="settingsView" class="view">
+        <section class="panel settings-panel"><div class="panel-head"><div><h2>Identitas Dokumen</h2><p class="muted">Dipakai pada Invoice, Proposal, SPK dan BAST.</p></div></div><form id="settingsForm" class="form-grid">
+          <label>Nama Usaha<input class="input" name="business_name" value="Reka Ruang"></label><label>PIC<input class="input" name="pic"></label><label>No. WhatsApp<input class="input" name="phone"></label><label>Email<input class="input" name="email"></label><label class="span-2">Alamat<textarea class="input" name="address" rows="2"></textarea></label><label>Bank 1<input class="input" name="bank1"></label><label>No. Rekening 1<input class="input" name="account1"></label><label>Atas Nama 1<input class="input" name="account_name1"></label><label>Bank 2<input class="input" name="bank2"></label><label>No. Rekening 2<input class="input" name="account2"></label><label>Atas Nama 2<input class="input" name="account_name2"></label><div class="span-2 settings-actions"><button class="btn primary" type="submit">Simpan Pengaturan</button><button id="resetConnectionBtn" class="btn ghost" type="button">Ganti Supabase</button></div>
+        </form></section>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="projectDialog" class="modal"><form id="projectForm" class="modal-card"><div class="modal-head"><h2 id="projectDialogTitle">Proyek Baru</h2><button type="button" class="icon-btn" data-close="projectDialog">×</button></div><input type="hidden" name="id"><div class="form-grid">
+    <label>Nama Proyek<input class="input" name="name" required placeholder="Kitchen Set Pak Niko"></label><label>Nama Client<input class="input" name="client_name" required></label><label>No. WhatsApp<input class="input" name="client_phone"></label><label>Email Client<input class="input" name="client_email" type="email"></label><label>Nilai Proyek (Rp)<input class="input" name="project_value" type="number" min="0" step="1000" required></label><label>Tanggal Mulai<input class="input" name="start_date" type="date"></label><label class="span-2">Lokasi<input class="input" name="location"></label><label class="span-2">Scope Pekerjaan<textarea class="input" name="scope" rows="4"></textarea></label><label class="span-2">Catatan Internal<textarea class="input" name="notes" rows="3"></textarea></label>
+  </div><div class="modal-actions"><button type="button" class="btn ghost" data-close="projectDialog">Batal</button><button class="btn primary" type="submit">Simpan Proyek</button></div></form></dialog>
+
+  <dialog id="projectDetailDialog" class="modal wide"><div class="modal-card detail-card"><div class="modal-head"><div><h2 id="detailTitle">Detail Proyek</h2><p id="detailMeta" class="muted"></p></div><button type="button" class="icon-btn" data-close="projectDetailDialog">×</button></div><div id="projectDetailContent"></div></div></dialog>
+
+  <dialog id="transactionDialog" class="modal"><form id="transactionForm" class="modal-card"><div class="modal-head"><h2>Tambah Transaksi</h2><button type="button" class="icon-btn" data-close="transactionDialog">×</button></div><input type="hidden" name="project_id"><div class="form-grid"><label>Jenis<select id="txType" class="input" name="type"><option value="income">Pemasukan</option><option value="expense">Pengeluaran</option></select></label><label>Tanggal<input class="input" name="tx_date" type="date" required></label><label id="incomeCategoryLabel">Kategori Pemasukan<input class="input" name="income_category" placeholder="DP / Progress / Pelunasan"></label><label id="expenseCategoryLabel" class="hidden">Kategori Pengeluaran<select class="input" name="expense_category"><option>Bahan</option><option>Jasa</option><option>Design</option></select></label><label>Nominal (Rp)<input class="input" name="amount" type="number" min="0" step="1000" required></label><label class="span-2">Keterangan<input class="input" name="description" required></label></div><div class="modal-actions"><button type="button" class="btn ghost" data-close="transactionDialog">Batal</button><button class="btn primary" type="submit">Simpan</button></div></form></dialog>
+
+  <dialog id="progressDialog" class="modal"><form id="progressForm" class="modal-card"><div class="modal-head"><h2>Update Progress Proyek</h2><button type="button" class="icon-btn" data-close="progressDialog">×</button></div><input type="hidden" name="project_id"><div class="form-grid"><label>Tahap<select class="input" name="stage"><option>Pengajuan</option><option>Deal</option><option>Design AI</option><option>Design Fix</option><option>Pengerjaan</option><option>Pemasangan</option><option>Selesai</option><option>Hold</option></select></label><label>Tanggal<input class="input" name="progress_date" type="date" required></label><label class="span-2">Catatan Progress<textarea class="input" name="notes" rows="4" placeholder="Contoh: client approve desain, produksi 50%, pemasangan kabinet bawah selesai..."></textarea></label></div><div id="progressWarning" class="notice hidden"></div><div class="modal-actions"><button type="button" class="btn ghost" data-close="progressDialog">Batal</button><button class="btn primary" type="submit">Simpan Progress</button></div></form></dialog>
+
+  <dialog id="fileDialog" class="modal"><form id="fileForm" class="modal-card"><div class="modal-head"><h2 id="fileDialogTitle">Upload File</h2><button type="button" class="icon-btn" data-close="fileDialog">×</button></div><input type="hidden" name="project_id"><input type="hidden" name="file_type"><div class="stack"><label>File<input class="input" name="files" type="file" multiple required accept="image/*,application/pdf"></label><label>Caption / Keterangan<input class="input" name="caption" placeholder="Contoh: Opsi AI v2 / Design fix disetujui client"></label><div id="fileUploadHint" class="notice"></div></div><div class="modal-actions"><button type="button" class="btn ghost" data-close="fileDialog">Batal</button><button class="btn primary" type="submit">Upload</button></div></form></dialog>
+
+  <dialog id="bastDialog" class="modal wide"><form id="bastForm" class="modal-card"><div class="modal-head"><div><h2 id="bastDialogTitle">BAST</h2><p id="bastDialogSub" class="muted"></p></div><button type="button" class="icon-btn" data-close="bastDialog">×</button></div><input type="hidden" name="project_id"><input type="hidden" name="bast_type"><div class="form-grid"><label>Tanggal BAST<input class="input" name="bast_date" type="date" required></label><label>Nama Client<input class="input" name="client_name" required></label><label>Perwakilan Reka Ruang<input class="input" name="contractor_name" required></label><label>Status<div id="bastStatusBadge" class="status-box"></div></label></div><h3>Checklist Serah Terima</h3><div id="bastChecklist" class="checklist"></div><label class="block-label">Catatan / Kekurangan<textarea class="input" name="notes" rows="3"></textarea></label><div class="signature-grid"><div><strong>Tanda Tangan Client</strong><canvas id="clientSignature" class="signature-pad" width="460" height="180"></canvas><div class="signature-actions"><button class="btn ghost small" type="button" data-clear-sign="client">Hapus TTD</button><span id="clientSignExisting" class="muted"></span></div></div><div><strong>Tanda Tangan Reka Ruang</strong><canvas id="contractorSignature" class="signature-pad" width="460" height="180"></canvas><div class="signature-actions"><button class="btn ghost small" type="button" data-clear-sign="contractor">Hapus TTD</button><span id="contractorSignExisting" class="muted"></span></div></div></div><div class="notice">BAST dianggap <b>Signed</b> setelah seluruh checklist dicentang dan kedua tanda tangan tersedia.</div><div class="modal-actions"><button id="printBastBtn" type="button" class="btn ghost">Print BAST</button><button class="btn primary" type="submit">Simpan BAST</button></div></form></dialog>
+
+  <dialog id="docDialog" class="modal wide"><form id="docForm" class="modal-card doc-card"><div class="modal-head"><div><h2 id="docDialogTitle">Buat Dokumen</h2><p id="docDialogSub" class="muted"></p></div><button type="button" class="icon-btn" data-close="docDialog">×</button></div><input type="hidden" name="project_id"><input type="hidden" name="doc_type"><div id="docFormFields" class="form-grid"></div><div class="modal-actions"><button type="button" class="btn ghost" data-close="docDialog">Batal</button><button class="btn primary" type="submit">Simpan & Preview PDF</button></div></form></dialog>
+
+  <div id="toast" class="toast"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
