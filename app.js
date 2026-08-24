@@ -137,7 +137,7 @@ function renderFinance(){
 }
 
 function renderDocuments(){
-  $('#documentsList').innerHTML=state.documents.length?state.documents.map(d=>`<div class="doc-row"><div><strong>${esc(d.doc_number)}</strong><span>${esc(docLabel(d.doc_type))} • ${esc(projectById(d.project_id)?.name||'-')} • ${dateID(d.issued_date)}</span></div><button class="btn ghost small" data-action="reprint-doc" data-id="${d.id}">Preview</button></div>`).join(''):empty('Belum ada dokumen tersimpan.');
+  $('#documentsList').innerHTML=state.documents.length?state.documents.map(d=>`<div class="doc-row"><div><strong>${esc(d.doc_number)}</strong><span>${esc(docLabel(d.doc_type))} • ${esc(projectById(d.project_id)?.name||'-')} • ${dateID(d.issued_date)}</span></div><div class="detail-actions"><button class="btn ghost small" data-action="reprint-doc" data-id="${d.id}">Preview</button><button class="btn primary small" data-action="download-doc" data-id="${d.id}">Download PDF</button></div></div>`).join(''):empty('Belum ada dokumen tersimpan.');
 }
 function populateDocProjects(){$('#docProjectSelect').innerHTML='<option value="">Pilih proyek...</option>'+state.projects.map(p=>`<option value="${p.id}">${esc(p.project_code||'')} — ${esc(p.name)}</option>`).join('')}
 function renderSettings(){const f=$('#settingsForm');Object.entries(state.settings||{}).forEach(([k,v])=>{if(f.elements[k])f.elements[k].value=v||''})}
@@ -166,7 +166,7 @@ function renderProjectDetail(id){
   const progressPane=`<section class="tab-pane" data-pane="progress"><div class="detail-actions"><button class="btn primary small" data-action="update-progress" data-id="${id}">+ Update Tahap / Tanggal</button></div>${timelineHtml(p,progress)}</section>`;
   const bastInstall=basts.find(x=>x.bast_type==='installation'),bastFinal=basts.find(x=>x.bast_type==='final');
   const bast=`<section class="tab-pane" data-pane="bast"><div class="bast-cards">${bastCard(id,'installation','BAST Pemasangan',bastInstall,'Checklist pemasangan dan penerimaan pekerjaan saat instalasi.')}${bastCard(id,'final','BAST Serah Terima Akhir',bastFinal,'BAST akhir sebelum proyek dinyatakan selesai.')}</div><div class="notice warning">Untuk mengubah tahap menjadi <b>Selesai</b>, BAST Pemasangan dan BAST Akhir harus berstatus Signed, serta minimal 1 foto hasil akhir sudah diupload.</div></section>`;
-  const docsPane=`<section class="tab-pane" data-pane="docs"><div class="detail-actions"><button class="btn primary small" data-action="new-doc" data-id="${id}" data-type="invoice">Invoice</button><button class="btn ghost small" data-action="new-doc" data-id="${id}" data-type="receipt">Kwitansi</button><button class="btn ghost small" data-action="new-doc" data-id="${id}" data-type="proposal">Proposal</button><button class="btn ghost small" data-action="new-doc" data-id="${id}" data-type="spk">SPK</button></div>${docs.length?docs.map(d=>`<div class="doc-row"><div><strong>${esc(d.doc_number)}</strong><span>${esc(docLabel(d.doc_type))} • ${dateID(d.issued_date)}</span></div><button class="btn ghost small" data-action="reprint-doc" data-id="${d.id}">Preview</button></div>`).join(''):empty('Belum ada dokumen untuk proyek ini.')}</section>`;
+  const docsPane=`<section class="tab-pane" data-pane="docs"><div class="detail-actions"><button class="btn primary small" data-action="new-doc" data-id="${id}" data-type="invoice">Invoice</button><button class="btn ghost small" data-action="new-doc" data-id="${id}" data-type="receipt">Kwitansi</button><button class="btn ghost small" data-action="new-doc" data-id="${id}" data-type="proposal">Proposal</button><button class="btn ghost small" data-action="new-doc" data-id="${id}" data-type="spk">SPK</button></div>${docs.length?docs.map(d=>`<div class="doc-row"><div><strong>${esc(d.doc_number)}</strong><span>${esc(docLabel(d.doc_type))} • ${dateID(d.issued_date)}</span></div><div class="detail-actions"><button class="btn ghost small" data-action="reprint-doc" data-id="${d.id}">Preview</button><button class="btn primary small" data-action="download-doc" data-id="${d.id}">Download PDF</button></div></div>`).join(''):empty('Belum ada dokumen untuk proyek ini.')}</section>`;
   const finals=files.filter(x=>x.file_type==='final_photo');
   const finalPane=`<section class="tab-pane" data-pane="final"><div class="detail-actions"><button class="btn primary small" data-action="upload-file" data-id="${id}" data-type="final_photo">+ Upload Foto Hasil Akhir</button></div><div class="notice">Upload foto hasil akhir proyek dari beberapa sudut. Minimal 1 foto diperlukan sebelum status proyek dapat menjadi Selesai.</div>${fileGrid(finals)}</section>`;
   $('#projectDetailContent').innerHTML=summary+tabs+overview+finance+design+progressPane+bast+docsPane+finalPane;
@@ -176,7 +176,7 @@ function summaryCard(l,v){return `<div class="summary-card"><span>${esc(l)}</spa
 function expenseBox(c,v){return `<div class="expense-box"><span>${esc(c)}</span><strong>${money(v)}</strong></div>`}
 function transactionTable(tx){return `<div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Jenis</th><th>Kategori</th><th>Keterangan</th><th>Nominal</th></tr></thead><tbody>${tx.length?tx.map(x=>`<tr><td>${dateID(x.tx_date)}</td><td>${x.type==='income'?'Pemasukan':'Pengeluaran'}</td><td>${esc(x.type==='income'?(x.income_category||'-'):(x.expense_category||'-'))}</td><td>${esc(x.description)}</td><td class="${x.type==='income'?'money-in':'money-out'}">${x.type==='income'?'+':'-'} ${money(x.amount)}</td></tr>`).join(''):`<tr><td colspan="5">Belum ada transaksi.</td></tr>`}</tbody></table></div>`}
 function timelineHtml(p,recs){const map=Object.fromEntries(recs.map(x=>[x.stage,x]));return `<div class="timeline">${STAGES.map((s,i)=>{const r=map[s],done=!!r,current=p.status===s;return `<div class="timeline-item ${done?'done':''} ${current?'current':''}"><div class="timeline-dot">${done?'✓':i+1}</div><div class="timeline-content"><strong><span>${esc(s)}</span>${['Pemasangan','Selesai'].includes(s)?'<span class="pill warn">BAST wajib</span>':''}</strong><small>${r?dateID(r.progress_date)+(r.notes?' • '+esc(r.notes):''):'Belum ada update'}</small></div></div>`}).join('')}</div>`}
-function bastCard(id,type,title,b,desc){return `<div class="bast-card"><h4>${esc(title)}</h4><p>${esc(desc)}</p><div>${b?(b.status==='signed'?'<span class="pill done">Signed</span>':'<span class="pill warn">Draft</span>'):'<span class="pill">Belum dibuat</span>'}</div>${b?.doc_number?`<div class="muted" style="margin-top:7px">${esc(b.doc_number)} • ${dateID(b.bast_date)}</div>`:''}<div class="detail-actions" style="margin-top:12px"><button class="btn ${b?'ghost':'primary'} small" data-action="open-bast" data-id="${id}" data-type="${type}">${b?'Buka / Edit':'Buat BAST'}</button>${b?`<button class="btn ghost small" data-action="print-bast" data-bast-id="${b.id}">Print</button>`:''}</div></div>`}
+function bastCard(id,type,title,b,desc){return `<div class="bast-card"><h4>${esc(title)}</h4><p>${esc(desc)}</p><div>${b?(b.status==='signed'?'<span class="pill done">Signed</span>':'<span class="pill warn">Draft</span>'):'<span class="pill">Belum dibuat</span>'}</div>${b?.doc_number?`<div class="muted" style="margin-top:7px">${esc(b.doc_number)} • ${dateID(b.bast_date)}</div>`:''}<div class="detail-actions" style="margin-top:12px"><button class="btn ${b?'ghost':'primary'} small" data-action="open-bast" data-id="${id}" data-type="${type}">${b?'Buka / Edit':'Buat BAST'}</button>${b?`<button class="btn ghost small" data-action="print-bast" data-bast-id="${b.id}">Preview / Print</button><button class="btn primary small" data-action="download-bast" data-bast-id="${b.id}">Download PDF</button>`:''}</div></div>`}
 function fileGrid(files){return files.length?`<div class="file-grid">${files.map(f=>`<div class="file-card"><div id="fileprev-${f.id}" class="file-preview">${f.mime_type?.startsWith('image/')?'Memuat...':'PDF / FILE'}</div><div class="file-meta"><strong title="${esc(f.file_name)}">${esc(f.file_name)}</strong><span>${esc(f.caption||'Tanpa caption')} • ${new Date(f.created_at).toLocaleString('id-ID')}</span></div><div class="file-actions"><button class="btn ghost small" data-action="open-file" data-id="${f.id}">Buka</button><button class="btn danger small" data-action="delete-file" data-id="${f.id}">Hapus</button></div></div>`).join('')}</div>`:empty('Belum ada file.')}
 async function hydrateFilePreviews(files){for(const f of files.filter(x=>x.mime_type?.startsWith('image/'))){const el=$(`#fileprev-${CSS.escape(f.id)}`);if(!el)continue;const {data}=await db.storage.from(BUCKET).createSignedUrl(f.storage_path,3600);if(data?.signedUrl)el.outerHTML=`<img src="${data.signedUrl}" alt="${esc(f.file_name)}">`}}
 
@@ -218,12 +218,12 @@ $('#bastForm').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget,fd=
   const payload={project_id:projectId,bast_type:type,doc_number:docNumber,bast_date:fd.bast_date,checklist,notes:fd.notes||null,client_name:fd.client_name,contractor_name:fd.contractor_name,client_signature_path:clientPath,contractor_signature_path:contractorPath,status:signed?'signed':'draft',signed_at:signed?new Date().toISOString():null,created_by:session.user.id};
   const {error}=await db.from('basts').upsert(payload,{onConflict:'project_id,bast_type'});if(error)throw error;await refresh();activeBast=state.basts.find(x=>x.project_id===projectId&&x.bast_type===type);$('#bastStatusBadge').innerHTML=signed?'<span class="pill done">Signed</span>':'<span class="pill warn">Draft / Belum Signed</span>';toast(signed?'BAST sudah Signed':'BAST tersimpan sebagai Draft')
 }catch(err){alert('Gagal menyimpan BAST: '+err.message)}};
-$('#printBastBtn').onclick=()=>{if(!activeBast)return alert('Simpan BAST terlebih dahulu sebelum print.');printBast(activeBast)};
-async function printBast(b){
+$('#printBastBtn').onclick=()=>{if(!activeBast)return alert('Simpan BAST terlebih dahulu sebelum preview / print.');printBast(activeBast)};
+$('#downloadBastBtn').onclick=()=>{if(!activeBast)return alert('Simpan BAST terlebih dahulu sebelum download.');downloadBastPdf(activeBast)};
+async function renderBastToWindow(b,w,options={}){
   const p=projectById(b.project_id);let clientUrl='',contractorUrl='';
   if(b.client_signature_path){const {data}=await db.storage.from(BUCKET).createSignedUrl(b.client_signature_path,3600);clientUrl=data?.signedUrl||''}
   if(b.contractor_signature_path){const {data}=await db.storage.from(BUCKET).createSignedUrl(b.contractor_signature_path,3600);contractorUrl=data?.signedUrl||''}
-  const w=window.open('','_blank');if(!w)return alert('Popup diblokir browser. Izinkan popup untuk mencetak dokumen.');
   const title=b.bast_type==='installation'?'BERITA ACARA PEMASANGAN':'BERITA ACARA SERAH TERIMA';
   const section=b.bast_type==='installation'?'PEMERIKSAAN & PENERIMAAN PEMASANGAN':'SERAH TERIMA HASIL PEKERJAAN';
   const checklist=(b.checklist||[]).map(x=>`<div class="check-row"><span class="check-box">${x.checked?'✓':''}</span><span>${esc(x.text)}</span></div>`).join('');
@@ -250,7 +250,18 @@ async function printBast(b){
       ${signatureBlock('Client',b.client_name||p.client_name,clientUrl,false)}
       ${signatureBlock('Reka Ruang',b.contractor_name||state.settings.pic||'Reka Ruang',contractorUrl,true)}
     </div>`;
-  w.document.write(printShell(b.doc_number,body,{displayTitle:title,footer:`REKA RUANG - ${title} - ${p.client_name}`}));w.document.close();
+  w.document.open();
+  w.document.write(printShell(b.doc_number,body,{displayTitle:title,footer:`REKA RUANG - ${title} - ${p.client_name}`,autoPrint:options.autoPrint!==false}));
+  w.document.close();
+  return {title,project:p};
+}
+async function printBast(b){
+  const w=window.open('','_blank');if(!w)return alert('Popup diblokir browser. Izinkan popup untuk preview / print dokumen.');
+  try{await renderBastToWindow(b,w,{autoPrint:true})}catch(err){w.close();alert('Gagal membuka BAST: '+err.message)}
+}
+async function downloadBastPdf(b){
+  const p=projectById(b.project_id);const label=b.bast_type==='installation'?'BAST-Pemasangan':'BAST-Serah-Terima';
+  try{await downloadRenderedPdf(win=>renderBastToWindow(b,win,{autoPrint:false}),`${label}-${p?.client_name||p?.name||'Reka-Ruang'}-${b.doc_number||''}`)}catch(err){alert('Gagal download PDF BAST: '+err.message)}
 }
 
 async function openDocBuilder(id,type){
@@ -279,13 +290,14 @@ async function openDocBuilder(id,type){
   $('#docFormFields').innerHTML=html;$('#docDialog').showModal();
 }
 $('#openDocBuilderBtn').onclick=()=>{const id=$('#docProjectSelect').value;if(!id)return alert('Pilih proyek terlebih dahulu.');openDocBuilder(id,$('#docTypeSelect').value)};
-$('#docForm').onsubmit=async e=>{e.preventDefault();const popup=window.open('','_blank');const fd=Object.fromEntries(new FormData(e.currentTarget).entries());const p=projectById(fd.project_id);try{const {data:num,error:numErr}=await db.rpc('next_document_number',{p_type:fd.doc_type});if(numErr)throw numErr;fd.amount=Number(fd.amount||0);const payload={project_id:p.id,doc_type:fd.doc_type,doc_number:num,issued_date:fd.issued_date,amount:fd.amount,content:fd,created_by:session.user.id};const {data:doc,error}=await db.from('documents').insert(payload).select().single();if(error)throw error;renderPrintableDoc(p,doc,popup);$('#docDialog').close();await refresh();toast('Dokumen tersimpan')}catch(err){popup?.close();alert('Gagal membuat dokumen: '+err.message)}};
+$('#docForm').onsubmit=async e=>{e.preventDefault();const mode=e.submitter?.dataset.docMode||'preview';const popup=mode==='preview'?window.open('','_blank'):null;const fd=Object.fromEntries(new FormData(e.currentTarget).entries());const p=projectById(fd.project_id);try{const {data:num,error:numErr}=await db.rpc('next_document_number',{p_type:fd.doc_type});if(numErr)throw numErr;fd.amount=Number(fd.amount||0);const payload={project_id:p.id,doc_type:fd.doc_type,doc_number:num,issued_date:fd.issued_date,amount:fd.amount,content:fd,created_by:session.user.id};const {data:doc,error}=await db.from('documents').insert(payload).select().single();if(error)throw error;if(mode==='download')await downloadDocObject(p,doc);else renderPrintableDoc(p,doc,popup);$('#docDialog').close();await refresh();toast(mode==='download'?'Dokumen tersimpan & PDF didownload':'Dokumen tersimpan')}catch(err){popup?.close();alert('Gagal membuat dokumen: '+err.message)}};
 function reprintDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;renderPrintableDoc(projectById(d.project_id),d,window.open('','_blank'))}
+async function downloadDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;try{await downloadDocObject(projectById(d.project_id),d)}catch(err){alert('Gagal download PDF: '+err.message)}}
 function signatureBlock(role,name,signatureUrl='',stamp=false){
   const logo=esc(logoAssetUrl());
   return `<div class="signature-party"><div class="sign-role">${esc(role)}</div><div class="sign-name-top">${role==='Reka Ruang'?'REKA RUANG':esc(String(name||'').toUpperCase())}</div><div class="signature-area">${signatureUrl?`<img class="signature-img" src="${signatureUrl}" alt="Tanda tangan">`:''}${stamp?`<div class="company-stamp"><img src="${logo}" alt="Cap Reka Ruang"></div>`:''}</div><div class="sign-line-name">${esc(name||'')}</div></div>`;
 }
-function renderPrintableDoc(p,doc,w){
+function renderPrintableDoc(p,doc,w,options={}){
   if(!w)return alert('Popup diblokir browser. Izinkan popup untuk preview / PDF.');
   const d={...(doc.content||{}),number:doc.doc_number,issued_date:doc.issued_date,amount:doc.amount};let body='',displayTitle=docLabel(doc.doc_type).toUpperCase();
   const bankRows=[
@@ -359,13 +371,46 @@ function renderPrintableDoc(p,doc,w){
       <div class="document-date">${dateID(doc.issued_date)}</div>
       <div class="signature-grid">${signatureBlock('Client',p.client_name,'',false)}${signatureBlock('Reka Ruang',state.settings.pic||state.settings.business_name||'Reka Ruang','',true)}</div>`;
   }
-  w.document.write(printShell(doc.doc_number,body,{displayTitle,footer:`REKA RUANG - ${displayTitle} - ${p.client_name}`}));w.document.close();
+  w.document.open();w.document.write(printShell(doc.doc_number,body,{displayTitle,footer:`REKA RUANG - ${displayTitle} - ${p.client_name}`,autoPrint:options.autoPrint!==false}));w.document.close();
 }
 function printShell(title,body,meta={}){
   const s=state.settings||{},logo=esc(logoAssetUrl()),displayTitle=esc(meta.displayTitle||'DOKUMEN'),footer=esc(meta.footer||`REKA RUANG - ${meta.displayTitle||'DOKUMEN'}`);
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title||'Dokumen Reka Ruang')}</title><style>
   @page{size:A4;margin:13mm 15mm 17mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#282b2d}body{font-family:Georgia,'Times New Roman',serif;font-size:11.3px;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}.page{min-height:260mm;position:relative;padding-bottom:14mm}.brand-header{display:grid;grid-template-columns:1fr 1fr;align-items:start;min-height:56mm;margin-bottom:7mm;position:relative}.brand-logo{display:flex;align-items:flex-start}.brand-logo img{width:61mm;height:43mm;object-fit:contain;object-position:left top}.brand-title{text-align:right;padding-top:2mm}.brand-title h1{font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1;margin:0 0 7mm;font-weight:800;letter-spacing:.2px}.brand-title .subtitle{color:#b58d63;font-weight:700;font-size:10.5px;letter-spacing:.3px}.section-title{font-size:13.5px;color:#ad855f;font-weight:800;margin:0 0 5mm;text-transform:uppercase}.meta-table,.detail-table,.bank-table,.receipt-table,.line-table{width:100%;border-collapse:collapse;margin:0 0 6mm}.meta-table{width:66%;}.meta-table.short{width:66%}.meta-table th,.meta-table td,.detail-table th,.detail-table td,.bank-table th,.bank-table td{border:1px solid #d8d6d2;padding:3px 8px;vertical-align:top}.meta-table th,.detail-table th,.bank-table th{width:36%;text-align:left;background:#f3f0ed;color:#616161}.meta-table td{font-size:11px}.client-title{color:#ad855f;font-weight:800;font-size:12px;margin:2mm 0 1mm}.client-name{font-size:16px;font-weight:800;margin-bottom:5mm}.line-table th,.line-table td{border:1px solid #d8d6d2;padding:5px 8px;vertical-align:middle}.line-table thead th{background:#262a2c;color:#fff;font-weight:700}.line-table tfoot th{border-color:#b58d63}.line-table tfoot .total-label,.line-table tfoot .total-amount{background:#b58d63;color:#fff;font-size:13px}.center{text-align:center!important}.right{text-align:right!important}.muted-print{margin-top:2px;color:#5c5c5c}.terbilang{margin:7mm 0 4mm;font-size:11px}.content-heading{font-weight:800;font-size:12px;margin:5mm 0 2mm}.content-heading.accent{color:#ad855f}.bank-table{width:88%;margin-left:7%}.bank-table th{width:27%;color:#333}.bank-table td:nth-child(2){width:34%}.document-note{margin-top:3mm;color:#5a5a5a}.document-note b{color:#2d2d2d}.receipt-table{width:92%;margin:9mm auto 7mm}.receipt-table th,.receipt-table td{border:1px solid #d8d6d2;padding:4px 9px;vertical-align:top}.receipt-table th{width:25%;background:#b58d63;color:#fff;text-align:left}.receipt-total{width:90%;margin:0 auto 8mm;background:#25292b;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:5px 28px;font-weight:800;font-size:13px}.receipt-total strong{font-size:20px}.content-heading+.note-box{margin-top:0}.note-box{border:1px solid #d8d6d2;padding:8px 10px;min-height:10mm;background:#fff}.agreement-text{margin-top:6mm}.detail-table th{width:25%;color:#333}.check-list{border:1px solid #d8d6d2}.check-row{display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:start;padding:6px 8px;border-bottom:1px solid #e4e1dd}.check-row:last-child{border-bottom:0}.check-box{width:15px;height:15px;border:1.4px solid #333;display:inline-flex;align-items:center;justify-content:center;font-weight:800;line-height:1}.document-date{text-align:right;margin:9mm 2mm 3mm}.signature-grid{display:grid;grid-template-columns:1fr 1fr;gap:22mm;margin-top:3mm;text-align:center}.signature-party{position:relative;min-height:42mm}.sign-role{font-weight:700;margin-bottom:2mm}.sign-name-top{font-weight:800}.signature-area{height:25mm;position:relative;display:flex;align-items:center;justify-content:center}.signature-img{position:absolute;z-index:2;width:42mm;height:20mm;object-fit:contain}.company-stamp{position:absolute;z-index:3;width:39mm;height:22mm;border:2px solid rgba(173,133,95,.9);border-radius:50%;display:flex;align-items:center;justify-content:center;transform:rotate(-5deg);opacity:.86;background:rgba(255,255,255,.83)}.company-stamp:after{content:'REKA RUANG';position:absolute;bottom:1.5mm;font-family:Arial,sans-serif;font-size:6px;font-weight:900;letter-spacing:1px;color:#8f6d4f}.company-stamp img{width:31mm;height:15mm;object-fit:contain}.sign-line-name{display:inline-block;min-width:45mm;border-bottom:1px solid #666;padding:0 5px 2px}.receipt-signatures{margin-top:0}.print-signatures{margin-top:4mm}.doc-footer{position:fixed;left:0;right:0;bottom:4mm;text-align:center;font-size:8px;color:#777}.brand-contact{position:absolute;right:0;bottom:0;text-align:right;color:#777;font-family:Arial,sans-serif;font-size:7.5px;line-height:1.4}.brand-contact:empty{display:none}p{margin:0 0 4mm}b,strong{font-weight:800}@media screen{body{padding:12px}.page{max-width:210mm;margin:auto;box-shadow:0 0 0 1px #eee}}@media print{body{padding:0}.page{box-shadow:none}}
-  </style></head><body><div class="page"><header class="brand-header"><div class="brand-logo"><img src="${logo}" alt="Reka Ruang"></div><div class="brand-title"><h1>${displayTitle}</h1><div class="subtitle">REKA RUANG - INTERIOR &amp; BUILD</div></div><div class="brand-contact">${esc(s.phone||'')}${s.email?'<br>'+esc(s.email):''}${s.address?'<br>'+esc(s.address):''}</div></header>${body}<div class="doc-footer">${footer}</div></div><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),550));<\/script></body></html>`;
+  </style></head><body><div class="page"><header class="brand-header"><div class="brand-logo"><img src="${logo}" alt="Reka Ruang"></div><div class="brand-title"><h1>${displayTitle}</h1><div class="subtitle">REKA RUANG - INTERIOR &amp; BUILD</div></div><div class="brand-contact">${esc(s.phone||'')}${s.email?'<br>'+esc(s.email):''}${s.address?'<br>'+esc(s.address):''}</div></header>${body}<div class="doc-footer">${footer}</div></div>${meta.autoPrint===false?'':`<script>window.addEventListener('load',()=>setTimeout(()=>window.print(),550));<\/script>`}</body></html>`;
+}
+
+function pdfSafeName(value){
+  const base=String(value||'dokumen-reka-ruang').normalize('NFKD').replace(/[\\/:*?"<>|]+/g,'-').replace(/\s+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+  return (base||'dokumen-reka-ruang')+'.pdf';
+}
+async function waitForPdfFrame(frame){
+  const doc=frame.contentDocument;
+  if(!doc)throw new Error('Dokumen PDF tidak dapat dibuat.');
+  if(doc.readyState!=='complete')await new Promise(resolve=>{const done=()=>resolve();frame.addEventListener('load',done,{once:true});setTimeout(done,1500)});
+  const imgs=[...doc.images];
+  await Promise.all(imgs.map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});setTimeout(resolve,1800)})));
+  if(doc.fonts?.ready)try{await doc.fonts.ready}catch{}
+  await new Promise(r=>setTimeout(r,180));
+}
+async function downloadRenderedPdf(renderFn,filename){
+  if(typeof window.html2pdf!=='function')throw new Error('Library PDF belum termuat. Refresh halaman lalu coba lagi.');
+  const frame=document.createElement('iframe');
+  frame.setAttribute('aria-hidden','true');
+  frame.style.cssText='position:fixed;left:-10000px;top:0;width:794px;height:1123px;border:0;opacity:0;pointer-events:none;background:#fff;';
+  document.body.appendChild(frame);
+  try{
+    await renderFn(frame.contentWindow);
+    await waitForPdfFrame(frame);
+    const page=frame.contentDocument.querySelector('.page');if(!page)throw new Error('Layout dokumen tidak ditemukan.');
+    const options={margin:0,filename:pdfSafeName(filename),image:{type:'jpeg',quality:.98},html2canvas:{scale:2,useCORS:true,allowTaint:false,backgroundColor:'#ffffff',logging:false,scrollX:0,scrollY:0},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy']}};
+    await window.html2pdf().set(options).from(page).save();
+    toast('PDF berhasil didownload');
+  }finally{frame.remove()}
+}
+async function downloadDocObject(p,doc){
+  const label=docLabel(doc.doc_type);
+  await downloadRenderedPdf(win=>renderPrintableDoc(p,doc,win,{autoPrint:false}),`${label}-${p?.client_name||p?.name||'Reka-Ruang'}-${doc.doc_number||''}`);
 }
 
 $('#settingsForm').onsubmit=async e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(e.currentTarget).entries());fd.id='company';try{const {error}=await db.from('company_settings').upsert(fd);if(error)throw error;await refresh(false);toast('Pengaturan disimpan')}catch(err){alert('Gagal menyimpan pengaturan: '+err.message)}};
@@ -385,8 +430,10 @@ document.addEventListener('click',async e=>{
   if(a.dataset.action==='delete-file')deleteStoredFile(id);
   if(a.dataset.action==='open-bast')openBast(id,a.dataset.type);
   if(a.dataset.action==='print-bast'){const b=state.basts.find(x=>x.id===a.dataset.bastId);if(b)printBast(b)}
+  if(a.dataset.action==='download-bast'){const b=state.basts.find(x=>x.id===a.dataset.bastId);if(b)downloadBastPdf(b)}
   if(a.dataset.action==='new-doc')openDocBuilder(id,a.dataset.type);
   if(a.dataset.action==='reprint-doc')reprintDoc(id);
+  if(a.dataset.action==='download-doc')downloadDoc(id);
 });
 function switchView(name){$$('.nav-btn').forEach(x=>x.classList.toggle('active',x.dataset.view===name));$$('.view').forEach(x=>x.classList.remove('active'));$('#'+name+'View').classList.add('active');const meta={dashboard:['Dashboard','Ringkasan proyek, progress, dan arus keuangan.'],projects:['Proyek','Semua data proyek Reka Ruang.'],finance:['Keuangan','Pemasukan dan pengeluaran per proyek.'],documents:['Dokumen','Invoice, Kwitansi, Proposal Penawaran, SPK, dan arsip dokumen.'],settings:['Pengaturan','Identitas Reka Ruang dan rekening pembayaran.']}[name];$('#pageTitle').textContent=meta[0];$('#pageSubtitle').textContent=meta[1]}
 $$('.nav-btn').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
