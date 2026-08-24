@@ -80,12 +80,12 @@
       </section>
 
       <section id="documentsView" class="view">
-        <section class="panel"><div class="panel-head"><div><h2>Generator Dokumen</h2><p class="muted">Invoice, Proposal Penawaran, dan SPK mengambil data dari proyek.</p></div></div><div class="doc-generator-grid"><select id="docProjectSelect" class="input"><option value="">Pilih proyek...</option></select><select id="docTypeSelect" class="input"><option value="invoice">Invoice</option><option value="proposal">Proposal Penawaran</option><option value="spk">SPK</option></select><button id="openDocBuilderBtn" class="btn primary">Buat Dokumen</button></div></section>
+        <section class="panel"><div class="panel-head"><div><h2>Generator Dokumen</h2><p class="muted">Invoice, Kwitansi, Proposal Penawaran, dan SPK mengambil data dari proyek.</p></div></div><div class="doc-generator-grid"><select id="docProjectSelect" class="input"><option value="">Pilih proyek...</option></select><select id="docTypeSelect" class="input"><option value="invoice">Invoice</option><option value="receipt">Kwitansi</option><option value="proposal">Proposal Penawaran</option><option value="spk">SPK</option></select><button id="openDocBuilderBtn" class="btn primary">Buat Dokumen</button></div></section>
         <section class="panel"><div class="panel-head"><h2>Riwayat Dokumen</h2></div><div id="documentsList"></div></section>
       </section>
 
       <section id="settingsView" class="view">
-        <section class="panel settings-panel"><div class="panel-head"><div><h2>Identitas Dokumen</h2><p class="muted">Dipakai pada Invoice, Proposal, SPK dan BAST.</p></div></div><form id="settingsForm" class="form-grid">
+        <section class="panel settings-panel"><div class="panel-head"><div><h2>Identitas Dokumen</h2><p class="muted">Dipakai pada Invoice, Kwitansi, Proposal, SPK dan BAST.</p></div></div><form id="settingsForm" class="form-grid">
           <label>Nama Usaha<input class="input" name="business_name" value="Reka Ruang"></label><label>PIC<input class="input" name="pic"></label><label>No. WhatsApp<input class="input" name="phone"></label><label>Email<input class="input" name="email"></label><label class="span-2">Alamat<textarea class="input" name="address" rows="2"></textarea></label><label>Bank 1<input class="input" name="bank1"></label><label>No. Rekening 1<input class="input" name="account1"></label><label>Atas Nama 1<input class="input" name="account_name1"></label><label>Bank 2<input class="input" name="bank2"></label><label>No. Rekening 2<input class="input" name="account2"></label><label>Atas Nama 2<input class="input" name="account_name2"></label><div class="span-2 settings-actions"><button class="btn primary" type="submit">Simpan Pengaturan</button><button id="resetConnectionBtn" class="btn ghost" type="button">Ganti Supabase</button></div>
         </form></section>
       </section>

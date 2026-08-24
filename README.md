@@ -25,9 +25,9 @@ Setiap tahap menyimpan **tanggal progress dan catatan**. Status **Selesai** hany
 - Pengeluaran hanya dibagi menjadi **Bahan, Jasa, Design**.
 - Upload **Design AI** dan **Design Fix** per proyek.
 - Riwayat progress bertanggal untuk setiap tahap.
-- BAST Pemasangan dan BAST Akhir dengan checklist + tanda tangan client + Reka Ruang.
+- BAST Pemasangan dan BAST Akhir dengan checklist + tanda tangan client + Reka Ruang, serta template cetak branded dan cap logo Reka Ruang.
 - Upload foto hasil akhir proyek.
-- Generator **Invoice, Proposal Penawaran, dan SPK**.
+- Generator **Invoice, Kwitansi, Proposal Penawaran, dan SPK** dengan template branded Reka Ruang.
 - Riwayat dokumen tersimpan di Supabase.
 - Storage private; file dibuka menggunakan signed URL.
 - Login tim memakai Supabase Authentication.
@@ -89,7 +89,27 @@ Karena seluruh database dan file menggunakan Supabase, aplikasi dapat dibuka dar
 - `app.js` — logika proyek, finance, file, BAST, dokumen dan auth.
 - `config.js` — konfigurasi Supabase.
 - `supabase.sql` — schema database, RLS, storage dan function nomor dokumen.
+- `migration_add_kwitansi_branding.sql` — migration kecil untuk database yang sudah dibuat dari versi sebelumnya.
+- `assets/reka-ruang-logo.png` — logo resmi yang dipakai pada semua dokumen.
 
 ## Catatan file upload
 
 Supabase standard upload dipakai untuk desain, PDF, foto final dan tanda tangan. Untuk file yang sangat besar (terutama > 6 MB), upload dapat lebih lambat; untuk penggunaan normal gambar render/PDF masih dapat digunakan.
+
+
+## Update template dokumen branded
+
+Versi ini menggunakan identitas visual Reka Ruang pada **Invoice, Kwitansi, Proposal, SPK, BAST Pemasangan, dan BAST Serah Terima**. Template cetak mengikuti gaya dokumen Reka Ruang: logo di kiri atas, judul dokumen di kanan, aksen bronze/charcoal, tabel rapi, footer, dan cap logo pada area pengesahan Reka Ruang.
+
+### Jika database Supabase SUDAH pernah dibuat dengan versi lama
+
+Jangan jalankan ulang seluruh schema. Buka **Supabase > SQL Editor**, lalu jalankan isi file:
+
+`migration_add_kwitansi_branding.sql`
+
+Migration ini hanya:
+- menambahkan tipe dokumen **Kwitansi**,
+- menambahkan prefix nomor otomatis `KWT/RR/...`,
+- tidak menghapus proyek, transaksi, desain, BAST, maupun dokumen lama.
+
+Setelah migration sukses, deploy ulang folder aplikasi ke Vercel.

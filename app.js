@@ -7,6 +7,30 @@ const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
 const today = ()=>new Date().toISOString().slice(0,10);
 const money = n=>'Rp '+Number(n||0).toLocaleString('id-ID');
 const dateID = d=>d?new Date(d+'T00:00:00').toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'}):'-';
+const moneyCompact = n=>'Rp'+Number(n||0).toLocaleString('id-ID');
+const DOC_LABELS={invoice:'Invoice',receipt:'Kwitansi',proposal:'Proposal Penawaran',spk:'SPK'};
+function docLabel(type){return DOC_LABELS[type]||type}
+function logoAssetUrl(){try{return new URL('assets/reka-ruang-logo.png',window.location.href).href}catch{return 'assets/reka-ruang-logo.png'}}
+function latestDoc(projectId,type){return state.documents.find(x=>x.project_id===projectId&&x.doc_type===type)||null}
+function latestIncome(projectId){return state.transactions.filter(x=>x.project_id===projectId&&x.type==='income').sort((a,b)=>String(b.tx_date||'').localeCompare(String(a.tx_date||''))||String(b.created_at||'').localeCompare(String(a.created_at||'')))[0]||null}
+function terbilang(value){
+  const n=Math.floor(Math.abs(Number(value)||0));
+  const words=['','Satu','Dua','Tiga','Empat','Lima','Enam','Tujuh','Delapan','Sembilan','Sepuluh','Sebelas'];
+  const spell=x=>{
+    if(x<12)return words[x];
+    if(x<20)return (spell(x-10)+' Belas').trim();
+    if(x<100)return (spell(Math.floor(x/10))+' Puluh '+spell(x%10)).trim();
+    if(x<200)return ('Seratus '+spell(x-100)).trim();
+    if(x<1000)return (spell(Math.floor(x/100))+' Ratus '+spell(x%100)).trim();
+    if(x<2000)return ('Seribu '+spell(x-1000)).trim();
+    if(x<1e6)return (spell(Math.floor(x/1000))+' Ribu '+spell(x%1000)).trim();
+    if(x<1e9)return (spell(Math.floor(x/1e6))+' Juta '+spell(x%1e6)).trim();
+    if(x<1e12)return (spell(Math.floor(x/1e9))+' Miliar '+spell(x%1e9)).trim();
+    if(x<1e15)return (spell(Math.floor(x/1e12))+' Triliun '+spell(x%1e12)).trim();
+    return String(x);
+  };
+  return ((n===0?'Nol':spell(n))+' Rupiah').replace(/\s+/g,' ').trim();
+}
 const esc = s=>String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const uid = ()=>crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)+Date.now();
 
@@ -113,7 +137,7 @@ function renderFinance(){
 }
 
 function renderDocuments(){
-  $('#documentsList').innerHTML=state.documents.length?state.documents.map(d=>`<div class="doc-row"><div><strong>${esc(d.doc_number)}</strong><span>${esc(({invoice:'Invoice',proposal:'Proposal Penawaran',spk:'SPK'})[d.doc_type]||d.doc_type)} • ${esc(projectById(d.project_id)?.name||'-')} • ${dateID(d.issued_date)}</span></div><button class="btn ghost small" data-action="reprint-doc" data-id="${d.id}">Preview</button></div>`).join(''):empty('Belum ada dokumen tersimpan.');
+  $('#documentsList').innerHTML=state.documents.length?state.documents.map(d=>`<div class="doc-row"><div><strong>${esc(d.doc_number)}</strong><span>${esc(docLabel(d.doc_type))} • ${esc(projectById(d.project_id)?.name||'-')} • ${dateID(d.issued_date)}</span></div><button class="btn ghost small" data-action="reprint-doc" data-id="${d.id}">Preview</button></div>`).join(''):empty('Belum ada dokumen tersimpan.');
 }
 function populateDocProjects(){$('#docProjectSelect').innerHTML='<option value="">Pilih proyek...</option>'+state.projects.map(p=>`<option value="${p.id}">${esc(p.project_code||'')} — ${esc(p.name)}</option>`).join('')}
 function renderSettings(){const f=$('#settingsForm');Object.entries(state.settings||{}).forEach(([k,v])=>{if(f.elements[k])f.elements[k].value=v||''})}
@@ -142,7 +166,7 @@ function renderProjectDetail(id){
   const progressPane=`<section class="tab-pane" data-pane="progress"><div class="detail-actions"><button class="btn primary small" data-action="update-progress" data-id="${id}">+ Update Tahap / Tanggal</button></div>${timelineHtml(p,progress)}</section>`;
   const bastInstall=basts.find(x=>x.bast_type==='installation'),bastFinal=basts.find(x=>x.bast_type==='final');
   const bast=`<section class="tab-pane" data-pane="bast"><div class="bast-cards">${bastCard(id,'installation','BAST Pemasangan',bastInstall,'Checklist pemasangan dan penerimaan pekerjaan saat instalasi.')}${bastCard(id,'final','BAST Serah Terima Akhir',bastFinal,'BAST akhir sebelum proyek dinyatakan selesai.')}</div><div class="notice warning">Untuk mengubah tahap menjadi <b>Selesai</b>, BAST Pemasangan dan BAST Akhir harus berstatus Signed, serta minimal 1 foto hasil akhir sudah diupload.</div></section>`;
-  const docsPane=`<section class="tab-pane" data-pane="docs"><div class="detail-actions"><button class="btn primary small" data-action="new-doc" data-id="${id}" data-type="invoice">Invoice</button><button class="btn ghost small" data-action="new-doc" data-id="${id}" data-type="proposal">Proposal</button><button class="btn ghost small" data-action="new-doc" data-id="${id}" data-type="spk">SPK</button></div>${docs.length?docs.map(d=>`<div class="doc-row"><div><strong>${esc(d.doc_number)}</strong><span>${esc(d.doc_type.toUpperCase())} • ${dateID(d.issued_date)}</span></div><button class="btn ghost small" data-action="reprint-doc" data-id="${d.id}">Preview</button></div>`).join(''):empty('Belum ada dokumen untuk proyek ini.')}</section>`;
+  const docsPane=`<section class="tab-pane" data-pane="docs"><div class="detail-actions"><button class="btn primary small" data-action="new-doc" data-id="${id}" data-type="invoice">Invoice</button><button class="btn ghost small" data-action="new-doc" data-id="${id}" data-type="receipt">Kwitansi</button><button class="btn ghost small" data-action="new-doc" data-id="${id}" data-type="proposal">Proposal</button><button class="btn ghost small" data-action="new-doc" data-id="${id}" data-type="spk">SPK</button></div>${docs.length?docs.map(d=>`<div class="doc-row"><div><strong>${esc(d.doc_number)}</strong><span>${esc(docLabel(d.doc_type))} • ${dateID(d.issued_date)}</span></div><button class="btn ghost small" data-action="reprint-doc" data-id="${d.id}">Preview</button></div>`).join(''):empty('Belum ada dokumen untuk proyek ini.')}</section>`;
   const finals=files.filter(x=>x.file_type==='final_photo');
   const finalPane=`<section class="tab-pane" data-pane="final"><div class="detail-actions"><button class="btn primary small" data-action="upload-file" data-id="${id}" data-type="final_photo">+ Upload Foto Hasil Akhir</button></div><div class="notice">Upload foto hasil akhir proyek dari beberapa sudut. Minimal 1 foto diperlukan sebelum status proyek dapat menjadi Selesai.</div>${fileGrid(finals)}</section>`;
   $('#projectDetailContent').innerHTML=summary+tabs+overview+finance+design+progressPane+bast+docsPane+finalPane;
@@ -195,17 +219,154 @@ $('#bastForm').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget,fd=
   const {error}=await db.from('basts').upsert(payload,{onConflict:'project_id,bast_type'});if(error)throw error;await refresh();activeBast=state.basts.find(x=>x.project_id===projectId&&x.bast_type===type);$('#bastStatusBadge').innerHTML=signed?'<span class="pill done">Signed</span>':'<span class="pill warn">Draft / Belum Signed</span>';toast(signed?'BAST sudah Signed':'BAST tersimpan sebagai Draft')
 }catch(err){alert('Gagal menyimpan BAST: '+err.message)}};
 $('#printBastBtn').onclick=()=>{if(!activeBast)return alert('Simpan BAST terlebih dahulu sebelum print.');printBast(activeBast)};
-async function printBast(b){const p=projectById(b.project_id);let clientUrl='',contractorUrl='';if(b.client_signature_path){const {data}=await db.storage.from(BUCKET).createSignedUrl(b.client_signature_path,3600);clientUrl=data?.signedUrl||''}if(b.contractor_signature_path){const {data}=await db.storage.from(BUCKET).createSignedUrl(b.contractor_signature_path,3600);contractorUrl=data?.signedUrl||''}const w=window.open('','_blank');const title=b.bast_type==='installation'?'BERITA ACARA PEMASANGAN':'BERITA ACARA SERAH TERIMA PEKERJAAN';const checklist=(b.checklist||[]).map(x=>`<li>${x.checked?'☑':'☐'} ${esc(x.text)}</li>`).join('');w.document.write(printShell(b.doc_number,`<h1>${title}</h1><div class="docno">${esc(b.doc_number||'')}</div><p>Pada tanggal <b>${dateID(b.bast_date)}</b>, Reka Ruang dan client melakukan pemeriksaan serta serah terima pekerjaan untuk proyek berikut:</p><div class="info"><div><b>Proyek</b><br>${esc(p.name)}<br>${esc(p.project_code||'')}</div><div><b>Client</b><br>${esc(b.client_name||p.client_name)}<br>${esc(p.location||'')}</div></div><h2>Checklist Pemeriksaan</h2><ul class="checks">${checklist}</ul><h2>Catatan</h2><div class="box">${esc(b.notes||'Tidak ada catatan tambahan.').replace(/\n/g,'<br>')}</div><div class="sign"><div><span>Client</span>${clientUrl?`<img src="${clientUrl}">`:'<div class="sigspace"></div>'}<b>${esc(b.client_name||'')}</b></div><div><span>Reka Ruang</span>${contractorUrl?`<img src="${contractorUrl}">`:'<div class="sigspace"></div>'}<b>${esc(b.contractor_name||'')}</b></div></div>`));w.document.close()}
+async function printBast(b){
+  const p=projectById(b.project_id);let clientUrl='',contractorUrl='';
+  if(b.client_signature_path){const {data}=await db.storage.from(BUCKET).createSignedUrl(b.client_signature_path,3600);clientUrl=data?.signedUrl||''}
+  if(b.contractor_signature_path){const {data}=await db.storage.from(BUCKET).createSignedUrl(b.contractor_signature_path,3600);contractorUrl=data?.signedUrl||''}
+  const w=window.open('','_blank');if(!w)return alert('Popup diblokir browser. Izinkan popup untuk mencetak dokumen.');
+  const title=b.bast_type==='installation'?'BERITA ACARA PEMASANGAN':'BERITA ACARA SERAH TERIMA';
+  const section=b.bast_type==='installation'?'PEMERIKSAAN & PENERIMAAN PEMASANGAN':'SERAH TERIMA HASIL PEKERJAAN';
+  const checklist=(b.checklist||[]).map(x=>`<div class="check-row"><span class="check-box">${x.checked?'✓':''}</span><span>${esc(x.text)}</span></div>`).join('');
+  const body=`
+    <div class="section-title">${section}</div>
+    <table class="meta-table"><tbody>
+      <tr><th>Nomor BAST</th><td><b>${esc(b.doc_number||'-')}</b></td></tr>
+      <tr><th>Tanggal</th><td>${dateID(b.bast_date)}</td></tr>
+      <tr><th>Kode Proyek</th><td>${esc(p.project_code||'-')}</td></tr>
+    </tbody></table>
+    <div class="client-title">Data Pekerjaan</div>
+    <table class="detail-table"><tbody>
+      <tr><th>Proyek</th><td>${esc(p.name)}</td></tr>
+      <tr><th>Client</th><td>${esc(b.client_name||p.client_name)}</td></tr>
+      <tr><th>Lokasi</th><td>${esc(p.location||'-')}</td></tr>
+    </tbody></table>
+    <div class="content-heading">Checklist Pemeriksaan</div>
+    <div class="check-list">${checklist}</div>
+    <div class="content-heading">Catatan</div>
+    <div class="note-box">${esc(b.notes||'Tidak ada catatan tambahan.').replace(/\n/g,'<br>')}</div>
+    <p class="agreement-text">Dengan ditandatanganinya berita acara ini, kedua pihak menyatakan bahwa pemeriksaan pekerjaan telah dilakukan bersama sesuai checklist dan catatan di atas.</p>
+    <div class="document-date">${dateID(b.bast_date)}</div>
+    <div class="signature-grid print-signatures">
+      ${signatureBlock('Client',b.client_name||p.client_name,clientUrl,false)}
+      ${signatureBlock('Reka Ruang',b.contractor_name||state.settings.pic||'Reka Ruang',contractorUrl,true)}
+    </div>`;
+  w.document.write(printShell(b.doc_number,body,{displayTitle:title,footer:`REKA RUANG - ${title} - ${p.client_name}`}));w.document.close();
+}
 
-async function openDocBuilder(id,type){const p=projectById(id);if(!p)return;const f=$('#docForm');f.reset();f.elements.project_id.value=id;f.elements.doc_type.value=type;$('#docDialogTitle').textContent={invoice:'Buat Invoice',proposal:'Buat Proposal Penawaran',spk:'Buat SPK'}[type];$('#docDialogSub').textContent=`${p.project_code||''} — ${p.name} — ${p.client_name}`;const fin=financials(id);let html='';if(type==='invoice')html=`<label>Tanggal<input class="input" name="issued_date" type="date" value="${today()}" required></label><label>Nominal Tagihan (Rp)<input class="input" name="amount" type="number" value="${fin.receivable||p.project_value}" required></label><label>Termin<input class="input" name="term" value="DP / Progress / Pelunasan"></label><label class="span-2">Keterangan<textarea class="input" name="description" rows="3">Pembayaran proyek ${esc(p.name)}</textarea></label>`;else if(type==='proposal')html=`<label>Tanggal<input class="input" name="issued_date" type="date" value="${today()}" required></label><label>Berlaku Sampai<input class="input" name="valid_until" type="date"></label><label>Nilai Penawaran (Rp)<input class="input" name="amount" type="number" value="${p.project_value}" required></label><label class="span-2">Scope<textarea class="input" name="scope" rows="5">${esc(p.scope||'')}</textarea></label><label class="span-2">Syarat Pembayaran<textarea class="input" name="payment_terms" rows="4">DP sesuai kesepakatan setelah persetujuan penawaran. Pembayaran berikutnya mengikuti progress pekerjaan dan pelunasan pada serah terima.</textarea></label><label class="span-2">Catatan<textarea class="input" name="notes" rows="3">Perubahan pekerjaan di luar scope akan dikonfirmasi terlebih dahulu kepada client.</textarea></label>`;else html=`<label>Tanggal<input class="input" name="issued_date" type="date" value="${today()}" required></label><label>Nilai Pekerjaan (Rp)<input class="input" name="amount" type="number" value="${p.project_value}" required></label><label>Durasi Pekerjaan<input class="input" name="duration" value="Sesuai jadwal kerja yang disepakati"></label><label>Garansi<input class="input" name="warranty" value="3 bulan setelah serah terima"></label><label class="span-2">Lokasi<input class="input" name="location" value="${esc(p.location||'')}"></label><label class="span-2">Scope<textarea class="input" name="scope" rows="5">${esc(p.scope||'')}</textarea></label><label class="span-2">Termin Pembayaran<textarea class="input" name="payment_terms" rows="4">Pembayaran mengikuti termin yang telah disepakati. Pelunasan dilakukan pada saat serah terima pekerjaan.</textarea></label><label class="span-2">Ketentuan Tambahan<textarea class="input" name="notes" rows="3">Perubahan desain, material, atau scope setelah pekerjaan berjalan dapat memengaruhi biaya dan waktu pengerjaan.</textarea></label>`;$('#docFormFields').innerHTML=html;$('#docDialog').showModal()}
+async function openDocBuilder(id,type){
+  const p=projectById(id);if(!p)return;const f=$('#docForm');f.reset();f.elements.project_id.value=id;f.elements.doc_type.value=type;
+  $('#docDialogTitle').textContent={invoice:'Buat Invoice',receipt:'Buat Kwitansi',proposal:'Buat Proposal Penawaran',spk:'Buat SPK'}[type]||'Buat Dokumen';
+  $('#docDialogSub').textContent=`${p.project_code||''} — ${p.name} — ${p.client_name}`;
+  const fin=financials(id),spk=latestDoc(id,'spk'),income=latestIncome(id);let html='';
+  if(type==='invoice')html=`
+    <label>Tanggal Invoice<input class="input" name="issued_date" type="date" value="${today()}" required></label>
+    <label>Jatuh Tempo<input class="input" name="due_date" type="date" value="${today()}" required></label>
+    <label>Nominal Tagihan (Rp)<input class="input" name="amount" type="number" value="${fin.receivable||p.project_value}" required></label>
+    <label>Termin<input class="input" name="term" value="Down Payment / Progress / Pelunasan"></label>
+    <label class="span-2">Referensi SPK<input class="input" name="reference" value="${esc(spk?.doc_number||'')}"></label>
+    <label class="span-2">Keterangan<textarea class="input" name="description" rows="3">Pembayaran proyek ${esc(p.name)}</textarea></label>
+    <label class="span-2">Catatan<textarea class="input" name="notes" rows="2">Mohon mengirimkan bukti pembayaran setelah transfer.</textarea></label>`;
+  else if(type==='receipt')html=`
+    <label>Tanggal Kwitansi<input class="input" name="issued_date" type="date" value="${today()}" required></label>
+    <label>Nominal Diterima (Rp)<input class="input" name="amount" type="number" value="${Number(income?.amount||0)}" required></label>
+    <label>Sudah Terima Dari<input class="input" name="received_from" value="${esc(p.client_name||'')}" required></label>
+    <label>Jenis Pembayaran<input class="input" name="term" value="DP / Progress / Pelunasan"></label>
+    <label class="span-2">Referensi SPK<input class="input" name="reference" value="${esc(spk?.doc_number||'')}"></label>
+    <label class="span-2">Untuk Pembayaran<textarea class="input" name="description" rows="3">Pembayaran pekerjaan ${esc(p.name)}</textarea></label>
+    <label class="span-2">Catatan<textarea class="input" name="notes" rows="2">Kwitansi ini digunakan sebagai bukti pembayaran setelah dana diterima.</textarea></label>`;
+  else if(type==='proposal')html=`<label>Tanggal<input class="input" name="issued_date" type="date" value="${today()}" required></label><label>Berlaku Sampai<input class="input" name="valid_until" type="date"></label><label>Nilai Penawaran (Rp)<input class="input" name="amount" type="number" value="${p.project_value}" required></label><label class="span-2">Scope<textarea class="input" name="scope" rows="5">${esc(p.scope||'')}</textarea></label><label class="span-2">Syarat Pembayaran<textarea class="input" name="payment_terms" rows="4">DP sesuai kesepakatan setelah persetujuan penawaran. Pembayaran berikutnya mengikuti progress pekerjaan dan pelunasan pada serah terima.</textarea></label><label class="span-2">Catatan<textarea class="input" name="notes" rows="3">Perubahan pekerjaan di luar scope akan dikonfirmasi terlebih dahulu kepada client.</textarea></label>`;
+  else html=`<label>Tanggal<input class="input" name="issued_date" type="date" value="${today()}" required></label><label>Nilai Pekerjaan (Rp)<input class="input" name="amount" type="number" value="${p.project_value}" required></label><label>Durasi Pekerjaan<input class="input" name="duration" value="Sesuai jadwal kerja yang disepakati"></label><label>Garansi<input class="input" name="warranty" value="3 bulan setelah serah terima"></label><label class="span-2">Lokasi<input class="input" name="location" value="${esc(p.location||'')}"></label><label class="span-2">Scope<textarea class="input" name="scope" rows="5">${esc(p.scope||'')}</textarea></label><label class="span-2">Termin Pembayaran<textarea class="input" name="payment_terms" rows="4">Pembayaran mengikuti termin yang telah disepakati. Pelunasan dilakukan pada saat serah terima pekerjaan.</textarea></label><label class="span-2">Ketentuan Tambahan<textarea class="input" name="notes" rows="3">Perubahan desain, material, atau scope setelah pekerjaan berjalan dapat memengaruhi biaya dan waktu pengerjaan.</textarea></label>`;
+  $('#docFormFields').innerHTML=html;$('#docDialog').showModal();
+}
 $('#openDocBuilderBtn').onclick=()=>{const id=$('#docProjectSelect').value;if(!id)return alert('Pilih proyek terlebih dahulu.');openDocBuilder(id,$('#docTypeSelect').value)};
 $('#docForm').onsubmit=async e=>{e.preventDefault();const popup=window.open('','_blank');const fd=Object.fromEntries(new FormData(e.currentTarget).entries());const p=projectById(fd.project_id);try{const {data:num,error:numErr}=await db.rpc('next_document_number',{p_type:fd.doc_type});if(numErr)throw numErr;fd.amount=Number(fd.amount||0);const payload={project_id:p.id,doc_type:fd.doc_type,doc_number:num,issued_date:fd.issued_date,amount:fd.amount,content:fd,created_by:session.user.id};const {data:doc,error}=await db.from('documents').insert(payload).select().single();if(error)throw error;renderPrintableDoc(p,doc,popup);$('#docDialog').close();await refresh();toast('Dokumen tersimpan')}catch(err){popup?.close();alert('Gagal membuat dokumen: '+err.message)}};
 function reprintDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;renderPrintableDoc(projectById(d.project_id),d,window.open('','_blank'))}
-function renderPrintableDoc(p,doc,w){const d={...(doc.content||{}),number:doc.doc_number,issued_date:doc.issued_date,amount:doc.amount};let body='';if(doc.doc_type==='invoice'){const bank=[state.settings.bank1&&`${state.settings.bank1} — ${state.settings.account1||''} a.n. ${state.settings.account_name1||''}`,state.settings.bank2&&`${state.settings.bank2} — ${state.settings.account2||''} a.n. ${state.settings.account_name2||''}`].filter(Boolean).map(x=>`<div>${esc(x)}</div>`).join('');body=`<h1>INVOICE</h1><div class="docno">${esc(doc.doc_number)}</div><div class="info"><div><b>Kepada</b><br>${esc(p.client_name)}<br>${esc(p.client_phone||'')}<br>${esc(p.location||'')}</div><div><b>Tanggal</b> ${dateID(doc.issued_date)}<br><b>Proyek</b> ${esc(p.name)}<br><b>Termin</b> ${esc(d.term||'-')}</div></div><table><thead><tr><th>Deskripsi</th><th>Nominal</th></tr></thead><tbody><tr><td>${esc(d.description||'Pembayaran proyek')}</td><td>${money(doc.amount)}</td></tr></tbody><tfoot><tr><td><b>Total Tagihan</b></td><td><b>${money(doc.amount)}</b></td></tr></tfoot></table>${bank?`<div class="pay"><b>Pembayaran</b>${bank}</div>`:''}`}
-  else if(doc.doc_type==='proposal')body=`<h1>PROPOSAL PENAWARAN</h1><div class="docno">${esc(doc.doc_number)}</div><div class="info"><div><b>Kepada</b><br>${esc(p.client_name)}<br>${esc(p.location||'')}</div><div><b>Tanggal</b> ${dateID(doc.issued_date)}<br><b>Berlaku sampai</b> ${dateID(d.valid_until)}</div></div><h2>Ruang Lingkup Pekerjaan</h2><div class="box">${esc(d.scope||'').replace(/\n/g,'<br>')}</div><table><thead><tr><th>Penawaran</th><th>Nilai</th></tr></thead><tbody><tr><td>${esc(p.name)}</td><td>${money(doc.amount)}</td></tr></tbody><tfoot><tr><td><b>Total Penawaran</b></td><td><b>${money(doc.amount)}</b></td></tr></tfoot></table><h2>Syarat Pembayaran</h2><div class="box">${esc(d.payment_terms||'').replace(/\n/g,'<br>')}</div><h2>Catatan</h2><div class="box">${esc(d.notes||'').replace(/\n/g,'<br>')}</div>`;
-  else body=`<h1>SURAT PERINTAH KERJA (SPK)</h1><div class="docno">${esc(doc.doc_number)}</div><p>Pada tanggal <b>${dateID(doc.issued_date)}</b>, telah disepakati pekerjaan antara <b>${esc(state.settings.business_name||'Reka Ruang')}</b> sebagai pelaksana dan <b>${esc(p.client_name)}</b> sebagai pemberi pekerjaan.</p><div class="info"><div><b>Proyek</b><br>${esc(p.name)}<br>${esc(p.project_code||'')}</div><div><b>Lokasi</b><br>${esc(d.location||p.location||'-')}</div></div><h2>1. Ruang Lingkup</h2><div class="box">${esc(d.scope||'').replace(/\n/g,'<br>')}</div><h2>2. Nilai Pekerjaan</h2><div class="big-money">${money(doc.amount)}</div><h2>3. Pembayaran</h2><div class="box">${esc(d.payment_terms||'').replace(/\n/g,'<br>')}</div><h2>4. Waktu & Garansi</h2><div class="box"><b>Durasi:</b> ${esc(d.duration||'-')}<br><b>Garansi:</b> ${esc(d.warranty||'-')}</div><h2>5. Ketentuan Tambahan</h2><div class="box">${esc(d.notes||'').replace(/\n/g,'<br>')}</div><div class="sign"><div><span>Client</span><div class="sigspace"></div><b>${esc(p.client_name)}</b></div><div><span>Reka Ruang</span><div class="sigspace"></div><b>${esc(state.settings.pic||state.settings.business_name||'Reka Ruang')}</b></div></div>`;
-  w.document.write(printShell(doc.doc_number,body));w.document.close()}
-function printShell(title,body){const s=state.settings||{};return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title||'Dokumen Reka Ruang')}</title><style>@page{size:A4;margin:16mm}body{font-family:Arial,sans-serif;color:#1b211e;font-size:12px;line-height:1.5}header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #0f5b4d;padding-bottom:14px;margin-bottom:24px}.logo{font-size:24px;font-weight:900;letter-spacing:1px;color:#0f5b4d}.tag{font-size:10px;color:#6d7772}.biz{text-align:right;font-size:10px;color:#5e6863;max-width:280px}h1{font-size:24px;margin:0}.docno{color:#6b756f;margin-bottom:22px}h2{font-size:14px;margin:22px 0 8px}.info{display:grid;grid-template-columns:1fr 1fr;gap:18px;background:#f3f7f5;padding:14px;border-radius:10px;margin:18px 0}.box{border:1px solid #dfe5e1;border-radius:8px;padding:12px}table{width:100%;border-collapse:collapse;margin:18px 0}th,td{border:1px solid #dfe5e1;padding:10px;text-align:left}th{background:#f3f7f5}td:last-child,th:last-child{text-align:right}.pay{margin-top:20px;background:#f3f7f5;padding:14px;border-radius:8px}.big-money{font-size:22px;font-weight:900;color:#0f5b4d}.sign{display:grid;grid-template-columns:1fr 1fr;gap:70px;margin-top:48px;text-align:center}.sign span{display:block}.sign img{display:block;width:180px;height:80px;object-fit:contain;margin:8px auto}.sigspace{height:85px}.checks{list-style:none;padding:0}.checks li{padding:7px 0;border-bottom:1px solid #e8ecea}</style></head><body><header><div><div class="logo">REKA RUANG</div><div class="tag">Interior • Renovasi • Custom Furniture</div></div><div class="biz">${esc(s.business_name||'Reka Ruang')}<br>${esc(s.phone||'')}${s.email?' • '+esc(s.email):''}<br>${esc(s.address||'')}</div></header>${body}<script>window.onload=()=>setTimeout(()=>window.print(),350)<\/script></body></html>`}
+function signatureBlock(role,name,signatureUrl='',stamp=false){
+  const logo=esc(logoAssetUrl());
+  return `<div class="signature-party"><div class="sign-role">${esc(role)}</div><div class="sign-name-top">${role==='Reka Ruang'?'REKA RUANG':esc(String(name||'').toUpperCase())}</div><div class="signature-area">${signatureUrl?`<img class="signature-img" src="${signatureUrl}" alt="Tanda tangan">`:''}${stamp?`<div class="company-stamp"><img src="${logo}" alt="Cap Reka Ruang"></div>`:''}</div><div class="sign-line-name">${esc(name||'')}</div></div>`;
+}
+function renderPrintableDoc(p,doc,w){
+  if(!w)return alert('Popup diblokir browser. Izinkan popup untuk preview / PDF.');
+  const d={...(doc.content||{}),number:doc.doc_number,issued_date:doc.issued_date,amount:doc.amount};let body='',displayTitle=docLabel(doc.doc_type).toUpperCase();
+  const bankRows=[
+    state.settings.bank1&&`<tr><th>${esc(state.settings.bank1)}</th><td>${esc(state.settings.account1||'')}</td><td>a.n. ${esc(state.settings.account_name1||'')}</td></tr>`,
+    state.settings.bank2&&`<tr><th>${esc(state.settings.bank2)}</th><td>${esc(state.settings.account2||'')}</td><td>a.n. ${esc(state.settings.account_name2||'')}</td></tr>`
+  ].filter(Boolean).join('');
+  if(doc.doc_type==='invoice'){
+    const term=(d.term||'Tagihan').trim(),ref=d.reference||latestDoc(p.id,'spk')?.doc_number||'-';
+    body=`
+      <div class="section-title">TAGIHAN ${esc(term.toUpperCase())}</div>
+      <table class="meta-table"><tbody>
+        <tr><th>Nomor Invoice</th><td><b>${esc(doc.doc_number)}</b></td></tr>
+        <tr><th>Tanggal Invoice</th><td>${dateID(doc.issued_date)}</td></tr>
+        <tr><th>Jatuh Tempo</th><td>${dateID(d.due_date||doc.issued_date)}</td></tr>
+        <tr><th>Referensi</th><td>${esc(ref)}</td></tr>
+      </tbody></table>
+      <div class="client-title">Ditagihkan kepada</div><div class="client-name">${esc(p.client_name)}</div>
+      <table class="line-table"><thead><tr><th>Keterangan</th><th class="center">Qty</th><th class="right">Harga</th><th class="right">Jumlah</th></tr></thead><tbody>
+        <tr><td>${esc(d.description||`Pembayaran proyek ${p.name}`).replace(/\n/g,'<br>')}<div class="muted-print">Nilai kontrak: ${moneyCompact(p.project_value)}</div></td><td class="center">1</td><td class="right">${moneyCompact(doc.amount)}</td><td class="right"><b>${moneyCompact(doc.amount)}</b></td></tr>
+      </tbody><tfoot><tr><th colspan="3" class="total-label">TOTAL TAGIHAN</th><th class="right total-amount">${moneyCompact(doc.amount)}</th></tr></tfoot></table>
+      <div class="terbilang"><b>Terbilang:</b> <i>${esc(terbilang(doc.amount))}.</i></div>
+      ${bankRows?`<div class="content-heading accent">Pembayaran dapat dilakukan melalui:</div><table class="bank-table"><tbody>${bankRows}</tbody></table>`:''}
+      <div class="document-note"><b>Catatan:</b> ${esc(d.notes||'Invoice ini merupakan tagihan sesuai termin pembayaran proyek. Mohon mengirimkan bukti pembayaran setelah transfer.')}</div>`;
+  } else if(doc.doc_type==='receipt'){
+    const ref=d.reference||latestDoc(p.id,'spk')?.doc_number||'-',term=(d.term||'Pembayaran').trim();
+    displayTitle='KWITANSI';
+    body=`
+      <div class="section-title">BUKTI PEMBAYARAN ${esc(term.toUpperCase())}</div>
+      <table class="meta-table short"><tbody>
+        <tr><th>Nomor Kwitansi</th><td><b>${esc(doc.doc_number)}</b></td></tr>
+        <tr><th>Tanggal</th><td>${dateID(doc.issued_date)}</td></tr>
+      </tbody></table>
+      <table class="receipt-table"><tbody>
+        <tr><th>Sudah terima dari</th><td>${esc(d.received_from||p.client_name)}</td></tr>
+        <tr><th>Uang sejumlah</th><td><b>${moneyCompact(doc.amount)}</b></td></tr>
+        <tr><th>Terbilang</th><td><b>${esc(terbilang(doc.amount))}</b></td></tr>
+        <tr><th>Untuk pembayaran</th><td>${esc(d.description||`Pembayaran pekerjaan ${p.name}`)}${ref&&ref!=='-'?` sesuai ${esc(ref)}`:''}</td></tr>
+      </tbody></table>
+      <div class="receipt-total"><span>NILAI PEMBAYARAN</span><strong>${moneyCompact(doc.amount)}</strong></div>
+      <div class="document-date">${dateID(doc.issued_date)}</div>
+      <div class="signature-grid receipt-signatures">
+        ${signatureBlock('Reka Ruang',state.settings.pic||state.settings.business_name||'Reka Ruang','',true)}
+        ${signatureBlock('Pembayar',d.received_from||p.client_name,'',false)}
+      </div>
+      <div class="document-note"><b>Catatan:</b> ${esc(d.notes||'Kwitansi ini digunakan sebagai bukti pembayaran setelah dana diterima.')}</div>`;
+  } else if(doc.doc_type==='proposal'){
+    body=`
+      <div class="section-title">PENAWARAN PEKERJAAN INTERIOR & BUILD</div>
+      <table class="meta-table"><tbody>
+        <tr><th>Nomor Proposal</th><td><b>${esc(doc.doc_number)}</b></td></tr>
+        <tr><th>Tanggal</th><td>${dateID(doc.issued_date)}</td></tr>
+        <tr><th>Berlaku Sampai</th><td>${dateID(d.valid_until)}</td></tr>
+      </tbody></table>
+      <div class="client-title">Ditujukan kepada</div><div class="client-name">${esc(p.client_name)}</div>
+      <div class="content-heading">Ruang Lingkup Pekerjaan</div><div class="note-box">${esc(d.scope||p.scope||'-').replace(/\n/g,'<br>')}</div>
+      <table class="line-table"><thead><tr><th>Penawaran</th><th class="right">Nilai</th></tr></thead><tbody><tr><td>${esc(p.name)}</td><td class="right"><b>${moneyCompact(doc.amount)}</b></td></tr></tbody><tfoot><tr><th class="total-label">TOTAL PENAWARAN</th><th class="right total-amount">${moneyCompact(doc.amount)}</th></tr></tfoot></table>
+      <div class="content-heading">Syarat Pembayaran</div><div class="note-box">${esc(d.payment_terms||'-').replace(/\n/g,'<br>')}</div>
+      <div class="content-heading">Catatan</div><div class="note-box">${esc(d.notes||'-').replace(/\n/g,'<br>')}</div>
+      <div class="document-date">${dateID(doc.issued_date)}</div>
+      <div class="signature-grid">${signatureBlock('Client',p.client_name,'',false)}${signatureBlock('Reka Ruang',state.settings.pic||state.settings.business_name||'Reka Ruang','',true)}</div>`;
+  } else {
+    body=`
+      <div class="section-title">PERJANJIAN PELAKSANAAN PEKERJAAN</div>
+      <table class="meta-table"><tbody><tr><th>Nomor SPK</th><td><b>${esc(doc.doc_number)}</b></td></tr><tr><th>Tanggal</th><td>${dateID(doc.issued_date)}</td></tr><tr><th>Kode Proyek</th><td>${esc(p.project_code||'-')}</td></tr></tbody></table>
+      <p>Pada tanggal <b>${dateID(doc.issued_date)}</b>, telah disepakati pekerjaan antara <b>${esc(state.settings.business_name||'Reka Ruang')}</b> sebagai pelaksana dan <b>${esc(p.client_name)}</b> sebagai pemberi pekerjaan.</p>
+      <table class="detail-table"><tbody><tr><th>Proyek</th><td>${esc(p.name)}</td></tr><tr><th>Lokasi</th><td>${esc(d.location||p.location||'-')}</td></tr><tr><th>Nilai Pekerjaan</th><td><b>${moneyCompact(doc.amount)}</b></td></tr></tbody></table>
+      <div class="content-heading">1. Ruang Lingkup Pekerjaan</div><div class="note-box">${esc(d.scope||p.scope||'-').replace(/\n/g,'<br>')}</div>
+      <div class="content-heading">2. Termin Pembayaran</div><div class="note-box">${esc(d.payment_terms||'-').replace(/\n/g,'<br>')}</div>
+      <div class="content-heading">3. Waktu & Garansi</div><div class="note-box"><b>Durasi:</b> ${esc(d.duration||'-')}<br><b>Garansi:</b> ${esc(d.warranty||'-')}</div>
+      <div class="content-heading">4. Ketentuan Tambahan</div><div class="note-box">${esc(d.notes||'-').replace(/\n/g,'<br>')}</div>
+      <div class="document-date">${dateID(doc.issued_date)}</div>
+      <div class="signature-grid">${signatureBlock('Client',p.client_name,'',false)}${signatureBlock('Reka Ruang',state.settings.pic||state.settings.business_name||'Reka Ruang','',true)}</div>`;
+  }
+  w.document.write(printShell(doc.doc_number,body,{displayTitle,footer:`REKA RUANG - ${displayTitle} - ${p.client_name}`}));w.document.close();
+}
+function printShell(title,body,meta={}){
+  const s=state.settings||{},logo=esc(logoAssetUrl()),displayTitle=esc(meta.displayTitle||'DOKUMEN'),footer=esc(meta.footer||`REKA RUANG - ${meta.displayTitle||'DOKUMEN'}`);
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title||'Dokumen Reka Ruang')}</title><style>
+  @page{size:A4;margin:13mm 15mm 17mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;color:#282b2d}body{font-family:Georgia,'Times New Roman',serif;font-size:11.3px;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}.page{min-height:260mm;position:relative;padding-bottom:14mm}.brand-header{display:grid;grid-template-columns:1fr 1fr;align-items:start;min-height:56mm;margin-bottom:7mm;position:relative}.brand-logo{display:flex;align-items:flex-start}.brand-logo img{width:61mm;height:43mm;object-fit:contain;object-position:left top}.brand-title{text-align:right;padding-top:2mm}.brand-title h1{font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1;margin:0 0 7mm;font-weight:800;letter-spacing:.2px}.brand-title .subtitle{color:#b58d63;font-weight:700;font-size:10.5px;letter-spacing:.3px}.section-title{font-size:13.5px;color:#ad855f;font-weight:800;margin:0 0 5mm;text-transform:uppercase}.meta-table,.detail-table,.bank-table,.receipt-table,.line-table{width:100%;border-collapse:collapse;margin:0 0 6mm}.meta-table{width:66%;}.meta-table.short{width:66%}.meta-table th,.meta-table td,.detail-table th,.detail-table td,.bank-table th,.bank-table td{border:1px solid #d8d6d2;padding:3px 8px;vertical-align:top}.meta-table th,.detail-table th,.bank-table th{width:36%;text-align:left;background:#f3f0ed;color:#616161}.meta-table td{font-size:11px}.client-title{color:#ad855f;font-weight:800;font-size:12px;margin:2mm 0 1mm}.client-name{font-size:16px;font-weight:800;margin-bottom:5mm}.line-table th,.line-table td{border:1px solid #d8d6d2;padding:5px 8px;vertical-align:middle}.line-table thead th{background:#262a2c;color:#fff;font-weight:700}.line-table tfoot th{border-color:#b58d63}.line-table tfoot .total-label,.line-table tfoot .total-amount{background:#b58d63;color:#fff;font-size:13px}.center{text-align:center!important}.right{text-align:right!important}.muted-print{margin-top:2px;color:#5c5c5c}.terbilang{margin:7mm 0 4mm;font-size:11px}.content-heading{font-weight:800;font-size:12px;margin:5mm 0 2mm}.content-heading.accent{color:#ad855f}.bank-table{width:88%;margin-left:7%}.bank-table th{width:27%;color:#333}.bank-table td:nth-child(2){width:34%}.document-note{margin-top:3mm;color:#5a5a5a}.document-note b{color:#2d2d2d}.receipt-table{width:92%;margin:9mm auto 7mm}.receipt-table th,.receipt-table td{border:1px solid #d8d6d2;padding:4px 9px;vertical-align:top}.receipt-table th{width:25%;background:#b58d63;color:#fff;text-align:left}.receipt-total{width:90%;margin:0 auto 8mm;background:#25292b;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:5px 28px;font-weight:800;font-size:13px}.receipt-total strong{font-size:20px}.content-heading+.note-box{margin-top:0}.note-box{border:1px solid #d8d6d2;padding:8px 10px;min-height:10mm;background:#fff}.agreement-text{margin-top:6mm}.detail-table th{width:25%;color:#333}.check-list{border:1px solid #d8d6d2}.check-row{display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:start;padding:6px 8px;border-bottom:1px solid #e4e1dd}.check-row:last-child{border-bottom:0}.check-box{width:15px;height:15px;border:1.4px solid #333;display:inline-flex;align-items:center;justify-content:center;font-weight:800;line-height:1}.document-date{text-align:right;margin:9mm 2mm 3mm}.signature-grid{display:grid;grid-template-columns:1fr 1fr;gap:22mm;margin-top:3mm;text-align:center}.signature-party{position:relative;min-height:42mm}.sign-role{font-weight:700;margin-bottom:2mm}.sign-name-top{font-weight:800}.signature-area{height:25mm;position:relative;display:flex;align-items:center;justify-content:center}.signature-img{position:absolute;z-index:2;width:42mm;height:20mm;object-fit:contain}.company-stamp{position:absolute;z-index:3;width:39mm;height:22mm;border:2px solid rgba(173,133,95,.9);border-radius:50%;display:flex;align-items:center;justify-content:center;transform:rotate(-5deg);opacity:.86;background:rgba(255,255,255,.83)}.company-stamp:after{content:'REKA RUANG';position:absolute;bottom:1.5mm;font-family:Arial,sans-serif;font-size:6px;font-weight:900;letter-spacing:1px;color:#8f6d4f}.company-stamp img{width:31mm;height:15mm;object-fit:contain}.sign-line-name{display:inline-block;min-width:45mm;border-bottom:1px solid #666;padding:0 5px 2px}.receipt-signatures{margin-top:0}.print-signatures{margin-top:4mm}.doc-footer{position:fixed;left:0;right:0;bottom:4mm;text-align:center;font-size:8px;color:#777}.brand-contact{position:absolute;right:0;bottom:0;text-align:right;color:#777;font-family:Arial,sans-serif;font-size:7.5px;line-height:1.4}.brand-contact:empty{display:none}p{margin:0 0 4mm}b,strong{font-weight:800}@media screen{body{padding:12px}.page{max-width:210mm;margin:auto;box-shadow:0 0 0 1px #eee}}@media print{body{padding:0}.page{box-shadow:none}}
+  </style></head><body><div class="page"><header class="brand-header"><div class="brand-logo"><img src="${logo}" alt="Reka Ruang"></div><div class="brand-title"><h1>${displayTitle}</h1><div class="subtitle">REKA RUANG - INTERIOR &amp; BUILD</div></div><div class="brand-contact">${esc(s.phone||'')}${s.email?'<br>'+esc(s.email):''}${s.address?'<br>'+esc(s.address):''}</div></header>${body}<div class="doc-footer">${footer}</div></div><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),550));<\/script></body></html>`;
+}
 
 $('#settingsForm').onsubmit=async e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(e.currentTarget).entries());fd.id='company';try{const {error}=await db.from('company_settings').upsert(fd);if(error)throw error;await refresh(false);toast('Pengaturan disimpan')}catch(err){alert('Gagal menyimpan pengaturan: '+err.message)}};
 
@@ -227,7 +388,7 @@ document.addEventListener('click',async e=>{
   if(a.dataset.action==='new-doc')openDocBuilder(id,a.dataset.type);
   if(a.dataset.action==='reprint-doc')reprintDoc(id);
 });
-function switchView(name){$$('.nav-btn').forEach(x=>x.classList.toggle('active',x.dataset.view===name));$$('.view').forEach(x=>x.classList.remove('active'));$('#'+name+'View').classList.add('active');const meta={dashboard:['Dashboard','Ringkasan proyek, progress, dan arus keuangan.'],projects:['Proyek','Semua data proyek Reka Ruang.'],finance:['Keuangan','Pemasukan dan pengeluaran per proyek.'],documents:['Dokumen','Invoice, Proposal Penawaran, SPK, dan arsip dokumen.'],settings:['Pengaturan','Identitas Reka Ruang dan rekening pembayaran.']}[name];$('#pageTitle').textContent=meta[0];$('#pageSubtitle').textContent=meta[1]}
+function switchView(name){$$('.nav-btn').forEach(x=>x.classList.toggle('active',x.dataset.view===name));$$('.view').forEach(x=>x.classList.remove('active'));$('#'+name+'View').classList.add('active');const meta={dashboard:['Dashboard','Ringkasan proyek, progress, dan arus keuangan.'],projects:['Proyek','Semua data proyek Reka Ruang.'],finance:['Keuangan','Pemasukan dan pengeluaran per proyek.'],documents:['Dokumen','Invoice, Kwitansi, Proposal Penawaran, SPK, dan arsip dokumen.'],settings:['Pengaturan','Identitas Reka Ruang dan rekening pembayaran.']}[name];$('#pageTitle').textContent=meta[0];$('#pageSubtitle').textContent=meta[1]}
 $$('.nav-btn').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 
 init();
