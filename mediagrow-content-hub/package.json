@@ -1,0 +1,16 @@
+{
+  "name": "mediagrow-content-hub",
+  "version": "0.1.0",
+  "private": true,
+  "engines": { "node": ">=20.9.0" },
+  "scripts": { "dev": "next dev", "build": "next build", "start": "next start", "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "@supabase/supabase-js": "2.115.0",
+    "lucide-react": "1.41.0",
+    "next": "16.3.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "4.5.4"
+  },
+  "devDependencies": { "@types/node": "26.4.1", "@types/react": "19.2.18", "@types/react-dom": "19.2.7", "typescript": "5.9.3" }
+}
