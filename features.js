@@ -1,6 +1,83 @@
+// Compatibility storage: existing projects.notes only; no new columns or tables.
+const RR_META_MARKER='\n\n--- REKA_RUANG_INTERNAL_V1 ---\n';
+function rrEmptyMeta(){return {v:1,workItems:[],profitDistributions:[],close:null}}
+function rrDecodeNotes(raw){
+  const text=String(raw??''),at=text.lastIndexOf(RR_META_MARKER);
+  if(at<0)return {text,meta:rrEmptyMeta(),invalid:false};
+  try{
+    const meta=JSON.parse(text.slice(at+RR_META_MARKER.length));
+    if(meta?.v!==1||!Array.isArray(meta.workItems)||!Array.isArray(meta.profitDistributions)||!(meta.close===null||typeof meta.close==='object'))throw Error('Format tidak valid');
+    return {text:text.slice(0,at),meta,invalid:false};
+  }catch{return {text,meta:rrEmptyMeta(),invalid:true}}
+}
+function rrEncodeNotes(text,meta){
+  const plain=String(text??'');
+  return meta.workItems.length||meta.profitDistributions.length||meta.close
+    ?plain+RR_META_MARKER+JSON.stringify(meta):plain||null;
+}
+function rrHydrateProjects(projects){
+  state.workItems=[];state.profitDistributions=[];
+  return projects.map(row=>{
+    const {text,meta,invalid}=rrDecodeNotes(row.notes);
+    state.workItems.push(...meta.workItems.map(x=>({...x,project_id:row.id})));
+    state.profitDistributions.push(...meta.profitDistributions.map(x=>({...x,project_id:row.id})));
+    const c=meta.close;
+    return {...row,notes:text,_rrRawNotes:row.notes??null,_rrMeta:meta,_rrInvalid:invalid,
+      finance_closed_at:c?.at??null,finance_close_income:c?.income??null,finance_close_expense:c?.expense??null,finance_close_profit:c?.profit??null};
+  });
+}
+function rrMatchNotes(query,raw){return raw===null?query.is('notes',null):query.eq('notes',raw)}
+async function rrGetProject(id){
+  const {data,error}=await db.from('projects').select('*').eq('id',id).single();
+  if(error)throw error;
+  const decoded=rrDecodeNotes(data.notes);
+  if(decoded.invalid)throw Error('Catatan internal versi ini tidak terbaca. Jangan timpa data; hubungi pengelola sistem.');
+  return {row:data,...decoded};
+}
+async function rrWriteProject(id,mutate,expectedRaw){
+  const {row,text,meta}=await rrGetProject(id);
+  if(expectedRaw!==undefined&&row.notes!==expectedRaw)throw Error('Data proyek berubah di perangkat lain. Muat ulang lalu coba lagi.');
+  const next=await mutate(meta,row,text);
+  const patch={...next.patch,notes:rrEncodeNotes(next.text??text,next.meta??meta)};
+  let q=db.from('projects').update(patch).eq('id',id);
+  q=rrMatchNotes(q,row.notes??null);
+  // Prevent stale status/value from being used when closing or distributing profit.
+  q=q.eq('status',row.status);
+  if(row.project_value===null)q=q.is('project_value',null);else q=q.eq('project_value',row.project_value);
+  const {data,error}=await q.select('id');
+  if(error)throw error;
+  if(!data?.length)throw Error('Data proyek berubah atau akses simpan ditolak. Muat ulang, jangan simpan ulang tanpa pemeriksaan.');
+}
+async function rrReadTransactions(id=null){
+  const all=[],size=500;
+  for(let start=0;;start+=size){
+    let q=db.from('transactions').select('*').order('tx_date',{ascending:false}).order('id',{ascending:false});
+    if(id)q=q.eq('project_id',id);
+    const {data,error}=await q.range(start,start+size-1);
+    if(error)return {data:null,error};
+    all.push(...(data||[]));
+    if(!data||data.length<size)return {data:all,error:null};
+  }
+}
+async function rrLiveFinancials(row){
+  const {data,error}=await rrReadTransactions(row.id);if(error)throw error;
+  const income=data.filter(x=>x.type==='income').reduce((a,x)=>a+Number(x.amount||0),0);
+  const expense=data.filter(x=>x.type==='expense').reduce((a,x)=>a+Number(x.amount||0),0);
+  if(!Number.isFinite(income)||!Number.isFinite(expense))throw Error('Nominal transaksi tidak valid.');
+  return {income,expense,profit:income-expense,receivable:Math.max(0,Number(row.project_value||0)-income)};
+}
+function rrFinanceMatches(close,row,f){
+  return !!close&&row.status==='Selesai'&&f.receivable===0&&Number(close.income)===f.income&&Number(close.expense)===f.expense&&Number(close.profit)===f.income-f.expense&&Number(close.value)===Number(row.project_value||0);
+}
+async function rrRequireOpen(id){
+  const {meta}=await rrGetProject(id);
+  if(meta.close)throw Error('Keuangan proyek sudah ditutup di aplikasi.');
+}
+function rrId(){return crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)}
+
 // Reka Ruang - rincian volume pekerjaan dan bagi hasil setelah tutup keuangan.
 
-function isKitchenWork(name){return String(name||'').startsWith('Kitchen Set')}
+function isKitchenWork(name){return ['Kitchen Set Atas','Kitchen Set Bawah'].includes(name)}
 
 function volumeUnit(item){return item.measurement_mode==='kitchen_standard'?'m lari':'m²'}
 
@@ -66,19 +143,23 @@ async function submitWorkItem(e){
   if(fd.width_cm!==null&&(!Number.isFinite(fd.width_cm)||fd.width_cm<0)){alert('Lebar/kedalaman tidak valid.');return}
   const btn=form.querySelector('[type=submit]');btn.disabled=true;
   try{
-    let res;
-    if(id)res=await db.from('project_work_items').update(fd).eq('id',id);
-    else res=await db.from('project_work_items').insert({...fd,created_by:session.user.id});
-    if(res.error)throw res.error;
+    await rrWriteProject(fd.project_id,(meta)=>{
+      const items=[...meta.workItems];
+      const item={...fd,id:id||rrId()};
+      if(id){const i=items.findIndex(x=>x.id===id);if(i<0)throw Error('Rincian tidak ditemukan. Muat ulang.');items[i]={...items[i],...item}}
+      else items.push({...item,created_by:session.user.id,created_at:new Date().toISOString()});
+      return {meta:{...meta,workItems:items}};
+    },projectById(fd.project_id)?._rrRawNotes);
     document.querySelector('#workItemDialog').close();await refresh();toast('Rincian pekerjaan tersimpan');
   }catch(err){alert('Gagal menyimpan rincian: '+err.message)}finally{btn.disabled=false}
 }
 
 async function deleteWorkItem(workId){
   const x=state.workItems.find(v=>v.id===workId);if(!x||!confirm(`Hapus rincian ${x.work_name}?`))return;
-  const {error}=await db.from('project_work_items').delete().eq('id',workId);
-  if(error)return alert('Gagal menghapus: '+error.message);
-  await refresh();toast('Rincian pekerjaan dihapus');
+  try{
+    await rrWriteProject(x.project_id,meta=>({meta:{...meta,workItems:meta.workItems.filter(v=>v.id!==workId)}}),projectById(x.project_id)?._rrRawNotes);
+    await refresh();toast('Rincian pekerjaan dihapus');
+  }catch(err){alert('Gagal menghapus: '+err.message)}
 }
 
 function profitShareTotal(projectId){return state.profitDistributions.filter(x=>x.project_id===projectId).reduce((sum,x)=>sum+Number(x.amount||0),0)}
@@ -102,20 +183,24 @@ function renderProfitSharePane(id){
   const p=projectById(id),f=financials(id),list=state.profitDistributions.filter(x=>x.project_id===id);
   const closed=!!p.finance_closed_at,ready=p.status==='Selesai'&&f.receivable===0;
   const rows=list.map(x=>`<tr><td>${dateID(x.paid_date)}</td><td>${esc(x.recipient_name)}</td><td>${x.share_percent==null?'-':Number(x.share_percent).toLocaleString('id-ID',{maximumFractionDigits:2})+'%'}</td><td>${money(x.amount)}</td><td>${esc(x.notes||'-')}</td></tr>`).join('');
-  const intro=closed?`<div class="notice"><strong>Keuangan ditutup pada ${dateID(p.finance_closed_at?.slice(0,10))}.</strong> Pemasukan dan biaya operasional dikunci. Bagi hasil dicatat terpisah agar tidak mengurangi laba proyek dua kali.</div><div class="work-volume-summary"><div><span>Pemasukan Final</span><strong>${money(p.finance_close_income)}</strong></div><div><span>Biaya Final</span><strong>${money(p.finance_close_expense)}</strong></div><div><span>Laba Final</span><strong>${money(p.finance_close_profit)}</strong></div><div><span>Sudah Dibagikan</span><strong>${money(profitShareTotal(id))}</strong></div><div><span>Sisa Laba</span><strong>${money(profitShareRemaining(id))}</strong></div></div>`:`<div class="notice warning">Bagi hasil dibuka setelah proyek berstatus Selesai, seluruh tagihan lunas, dan semua biaya telah dicatat. Setelah ditutup, transaksi operasional proyek tidak bisa ditambah atau diubah.</div><div class="work-volume-summary"><div><span>Margin Saat Ini</span><strong>${money(f.margin)}</strong></div><div><span>Tagihan Tersisa</span><strong>${money(f.receivable)}</strong></div></div>`;
-  const action=closed?(profitShareRemaining(id)>0?`<button class="btn primary small" data-action="new-profit-share" data-id="${id}">+ Catat Bagi Hasil</button>`:'<span class="pill done">Seluruh laba sudah dibagikan / tidak ada laba</span>'):(ready?`<button class="btn primary small" data-action="close-finance" data-id="${id}">Tutup Keuangan & Tetapkan Laba</button>`:'<span class="muted">Selesaikan proyek dan pelunasan terlebih dahulu.</span>');
+  const intro=closed?`<div class="notice"><strong>Keuangan ditutup pada ${dateID(p.finance_closed_at?.slice(0,10))}.</strong> Penambahan transaksi operasional dinonaktifkan pada aplikasi ini. Bagi hasil dicatat terpisah agar tidak mengurangi laba proyek dua kali.</div><div class="work-volume-summary"><div><span>Pemasukan Final</span><strong>${money(p.finance_close_income)}</strong></div><div><span>Biaya Final</span><strong>${money(p.finance_close_expense)}</strong></div><div><span>Laba Final</span><strong>${money(p.finance_close_profit)}</strong></div><div><span>Sudah Dibagikan</span><strong>${money(profitShareTotal(id))}</strong></div><div><span>Sisa Laba</span><strong>${money(profitShareRemaining(id))}</strong></div></div>`:`<div class="notice warning">Bagi hasil dibuka setelah proyek berstatus Selesai, seluruh tagihan lunas, dan semua biaya telah dicatat. Setelah ditutup, transaksi baru diblokir di aplikasi. Pastikan semua tim menggunakan versi terbaru.</div><div class="work-volume-summary"><div><span>Margin Saat Ini</span><strong>${money(f.margin)}</strong></div><div><span>Tagihan Tersisa</span><strong>${money(f.receivable)}</strong></div></div>`;
+  const changed=closed&&!rrFinanceMatches(p._rrMeta.close,p,f);
+  const action=p._rrInvalid?'<span class="pill warn">Data internal tidak terbaca</span>':changed?'<span class="pill warn">Keuangan berubah setelah tutup; pembagian diblokir. Periksa transaksi.</span>':closed?(profitShareRemaining(id)>0?`<button class="btn primary small" data-action="new-profit-share" data-id="${id}">+ Catat Bagi Hasil</button>`:'<span class="pill done">Seluruh laba sudah dibagikan / tidak ada laba</span>'):(ready?`<button class="btn primary small" data-action="close-finance" data-id="${id}">Tutup Keuangan & Tetapkan Laba</button>`:'<span class="muted">Selesaikan proyek dan pelunasan terlebih dahulu.</span>');
   return `<section class="tab-pane" data-pane="profit"><div class="detail-actions">${action}</div>${intro}<h3>Riwayat Pembagian</h3><div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Penerima</th><th>Persentase</th><th>Nominal</th><th>Keterangan</th></tr></thead><tbody>${rows||'<tr><td colspan="5">Belum ada pembagian keuntungan.</td></tr>'}</tbody></table></div></section>`;
 }
 
 async function closeProjectFinance(id){
-  const p=projectById(id),f=financials(id);
-  if(!p||p.finance_closed_at||p.status!=='Selesai'||f.receivable>0){alert('Proyek belum selesai / belum lunas / sudah ditutup.');return}
-  const msg=`Tutup keuangan ${p.name}?\n\nPemasukan: ${money(f.income)}\nBiaya: ${money(f.expense)}\nLaba final: ${money(f.income-f.expense)}\n\nPastikan semua biaya dan pelunasan benar. Setelah ditutup, transaksi proyek terkunci.`;
-  if(!confirm(msg))return;
-  const {data,error}=await db.from('projects').update({finance_closed_at:new Date().toISOString(),finance_close_income:f.income,finance_close_expense:f.expense,finance_close_profit:f.income-f.expense}).eq('id',id).is('finance_closed_at',null).select('id');
-  if(error)return alert('Gagal tutup keuangan: '+error.message);
-  if(!data?.length)return alert('Status proyek berubah. Muat ulang data sebelum menutup.');
-  await refresh();toast('Keuangan proyek ditutup');
+  try{
+    const {row,meta}=await rrGetProject(id),f=await rrLiveFinancials(row);
+    if(meta.close||row.status!=='Selesai'||f.receivable>0)throw Error('Proyek belum selesai / belum lunas / sudah ditutup.');
+    if(!confirm('Tutup keuangan '+row.name+'?\n\nPemasukan: '+money(f.income)+'\nBiaya: '+money(f.expense)+'\nLaba final: '+money(f.profit)+'\n\nPastikan semua biaya dan pelunasan benar. Penutupan membatasi transaksi di aplikasi, bukan langsung di database.'))return;
+    await rrWriteProject(id,async(current,fresh)=>{
+      const live=await rrLiveFinancials(fresh);
+      if(current.close||fresh.status!=='Selesai'||live.receivable>0||live.income!==f.income||live.expense!==f.expense||Number(fresh.project_value)!==Number(row.project_value))throw Error('Keuangan berubah saat dikonfirmasi. Periksa ulang.');
+      return {meta:{...current,close:{at:new Date().toISOString(),income:live.income,expense:live.expense,profit:live.profit,value:Number(fresh.project_value||0),by:session.user.id}}};
+    },row.notes??null);
+    await refresh();toast('Keuangan proyek ditutup');
+  }catch(err){alert('Gagal tutup keuangan: '+err.message)}
 }
 
 function openProfitShareDialog(id){
@@ -143,8 +228,14 @@ async function submitProfitShare(e){
   if(fd.share_percent!==null&&(!Number.isFinite(fd.share_percent)||fd.share_percent<=0||fd.share_percent>100)){alert('Persentase tidak valid.');return}
   const btn=form.querySelector('[type=submit]');btn.disabled=true;
   try{
-    const {error}=await db.from('profit_distributions').insert({...fd,created_by:session.user.id});
-    if(error)throw error;
+    await rrWriteProject(fd.project_id,async(meta,row)=>{
+      const live=await rrLiveFinancials(row);
+      if(!rrFinanceMatches(meta.close,row,live))throw Error('Keuangan berubah atau belum ditutup. Pembagian diblokir.');
+      const paid=meta.profitDistributions.reduce((sum,x)=>sum+Number(x.amount||0),0);
+      if(fd.amount>meta.close.profit-paid)throw Error('Nominal melebihi saldo laba tersedia.');
+      const item={...fd,id:rrId(),share_percent:Math.round(fd.amount/meta.close.profit*10000)/100,created_by:session.user.id,created_at:new Date().toISOString()};
+      return {meta:{...meta,profitDistributions:[...meta.profitDistributions,item]}};
+    },projectById(fd.project_id)?._rrRawNotes);
     document.querySelector('#profitShareDialog').close();await refresh();toast('Bagi hasil tercatat');
   }catch(err){alert('Gagal mencatat bagi hasil: '+err.message)}finally{btn.disabled=false}
 }
