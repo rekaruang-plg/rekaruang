@@ -1,48 +1,31 @@
-# Reka Ruang — Peningkatan Volume Pekerjaan dan Bagi Hasil
+# Update Reka Ruang tanpa migrasi Supabase
 
-Status: branch fitur-bagi-hasil-volume-pekerjaan. Belum digabung ke main, belum deploy, dan belum mengubah database produksi.
+Tidak ada tabel baru, kolom baru, SQL, atau perubahan konfigurasi Supabase. Aplikasi menggunakan skema lama. Jangan jalankan migrasi volume/bagi hasil dari versi draft sebelumnya.
 
-PENTING: config.js mengarah ke Supabase project mbkpajhzukrbiipgeibf. Proyek tersebut tidak ada dalam koneksi Supabase yang tersedia saat pengembangan, sehingga **jangan jalankan migrasi pada proyek Supabase lain**.
+## Penyimpanan
+- Data rincian pekerjaan, penutupan keuangan, dan bagi hasil disimpan pada bagian terstruktur dari kolom projects.notes. Catatan manual asli tetap terpisah dalam tampilan dan dipertahankan saat edit. Scope pekerjaan lama tidak diubah.
+- Data tetap tersimpan pada Supabase, bukan localStorage. Akun lain yang menggunakan versi aplikasi yang sama dan memiliki akses proyek dapat membacanya.
+- Bagi hasil muncul sebagai kategori virtual pada daftar keuangan dan mengurangi saldo kas setelah distribusi, tetapi bukan biaya operasional dan tidak dimasukkan ke tabel transactions. Nilai transaksi lama tidak diubah.
+- Penutupan keuangan memeriksa status Selesai, pelunasan, dan angka transaksi aktual. Pembagian hanya sampai laba tersedia. Data snapshot yang tidak cocok dengan transaksi aktual memblokir pembagian baru.
+- Aplikasi membaca ulang proyek dan memakai compare-and-swap pada nilai notes sebelum menulis, untuk mengurangi risiko menimpa perubahan dari perangkat lain.
 
-## Fitur volume pekerjaan
-- Proyek -> detail -> Volume Pekerjaan: tambah, edit, hapus rincian.
-- Kitchen Set Atas/Bawah standar: panjang(cm) / 100 × jumlah = meter lari.
-- Kitchen Set Atas/Bawah nonstandar: panjang(cm)/100 × tinggi(cm)/100 × jumlah = m².
-- Backdrop TV, Lemari, Walk-in Closet, Meja Rias, Wall Panel, Dipan, Pekerjaan Custom: panjang × tinggi × jumlah = m².
-- Lebar/kedalaman dicatat dalam cm namun tidak mempengaruhi hasil volume.
-- Total m² dan m lari dihitung terpisah.
+## Batasan yang harus diketahui
+- Aturan penguncian/validasi dilakukan di aplikasi, bukan trigger database. Versi lama, akses SQL, dan klien lain dapat melewati aturan, termasuk menghapus bagian terstruktur saat mengedit notes. Semua tim harus memakai aplikasi terbaru dan tidak mengedit catatan mentah langsung.
+- Perbandingan notes melalui API dapat terbatas oleh panjang URL bila data proyek sangat besar. Solusi ini cocok sebagai kompatibilitas sementara, bukan pengganti tabel relasional jangka panjang.
+- Tidak ada tombol buka kembali keuangan atau koreksi distribusi yang telah tercatat.
+- Penyimpanan bergantung pada kolom notes bertipe teks yang dapat menyimpan payload dan kebijakan update projects yang sudah dipakai aplikasi lama. Belum dapat diverifikasi di Supabase produksi.
+- Tidak ada transaksi atomik lintas tabel. Perubahan transaksi bersamaan dengan penutupan masih dapat terjadi; penyimpangan snapshot akan terdeteksi saat pengecekan berikutnya.
 
-## Fitur bagi hasil
-- Proyek -> detail -> Bagi Hasil.
-- Proyek harus berstatus Selesai, sudah menerima pelunasan, seluruh biaya dicatat.
-- Klik Tutup Keuangan & Tetapkan Laba. Laba = pemasukan aktual - biaya operasional aktual.
-- Penutupan mengunci pencatatan transaksi operasional proyek agar laba final tidak berubah.
-- Catat penerima, tanggal, persentase/nominal, dan catatan pembagian.
-- Total pembagian tidak boleh melebihi laba yang tersedia, termasuk saat dua akun menyimpan bersamaan.
-- Riwayat pembagian ditampilkan dalam detail proyek dan laporan Keuangan.
-- Bagi hasil merupakan distribusi laba, bukan biaya operasional (menghindari pengurangan laba dua kali).
+## Alur kerja
+1. Proyek > Volume Pekerjaan: pilih jenis, isi dimensi dan jumlah. Kitchen set standar = panjang/100 × jumlah (m lari); nonstandar/pekerjaan lain = panjang/100 × tinggi/100 × jumlah (m²). Lebar hanya informasi. Jenis pekerjaan custom dapat diisi bebas.
+2. Setelah proyek Selesai dan lunas, pastikan seluruh biaya sudah tercatat. Proyek > Bagi Hasil > Tutup Keuangan.
+3. Catat penerima, tanggal, nominal atau persentase. Lihat riwayat dan rekap pada Keuangan.
+4. Nilai kontrak dan status dikunci setelah penutupan pada versi ini.
 
-## Cara pemasangan
-1. Backup database Supabase Reka Ruang yang benar dan review struktur public.projects, public.transactions serta kebijakan akses tim.
-2. Jalankan file migration_volume_bagi_hasil.sql di SQL Editor Supabase project mbkpajhzukrbiipgeibf, sekali saja setelah diverifikasi.
-3. Pastikan tabel project_work_items, profit_distributions dan kolom keuangan di projects sudah muncul.
-4. Test pada data dummy/staging dengan akun pengguna.
-5. Setelah semua tes lolos, merge PR dan deploy Vercel. Jangan deploy aplikasi sebelum migrasi dijalankan karena versi baru memuat dua tabel baru saat login.
-
-## Checklist tes
-- [ ] Sistem lama: login, proyek, dokumen, keuangan, BAST, file masih berjalan.
-- [ ] Kitchen standar panjang 285 cm, jumlah 1 => 2,85 m lari tanpa tinggi.
-- [ ] Kitchen nonstandar panjang 285 cm, tinggi 80 cm => 2,28 m².
-- [ ] Backdrop panjang 364 cm, tinggi 300 cm => 10,92 m².
-- [ ] Lebar diubah tanpa mengubah volume.
-- [ ] Rincian tersimpan setelah reload dan bisa diedit/dihapus.
-- [ ] Proyek belum Selesai dan proyek belum lunas tidak bisa tutup keuangan.
-- [ ] Pemasukan dan biaya pas penutupan tersimpan sebagai snapshot.
-- [ ] Setelah ditutup, insert/update/delete transaksi operasional ditolak oleh database.
-- [ ] Dua pengguna yang membagikan laba serentak tidak melebihi saldo laba.
-- [ ] Bagi hasil Rp5 juta dari laba Rp10 juta ditampilkan 50%.
-- [ ] Pengeluaran proyek tidak termasuk bagi hasil dua kali.
-- [ ] Riwayat pembagian tetap terlihat setelah reload.
-- [ ] Halaman dan modal bekerja di tampilan HP.
-
-Catatan: Distribusi laba belum mendukung tombol koreksi/void; pembagian yang sudah tersimpan sengaja bersifat permanen untuk audit. Proyek yang ditutup juga tidak memiliki tombol buka ulang. RLS tabel lama harus diaudit di database yang benar.
+## Sebelum produksi
+- Gunakan preview Vercel dengan akun tim. Pastikan kolom notes dapat disimpan tanpa batasan yang tidak diketahui.
+- Uji pada proyek dummy: simpan/edit/hapus item, edit catatan manual, reload dan login dari perangkat lain.
+- Uji angka 285cm = 2,85 m; 285 × 80cm = 2,28 m²; 364 × 300cm = 10,92 m². Lebar tidak mengubah volume.
+- Pastikan proyek belum selesai/belum lunas tidak bisa ditutup. Cek laba dari pemasukan aktual dikurangi biaya aktual. Uji distribusi melebihi saldo dan penyimpanan dari dua perangkat.
+- Pastikan transaksi, BAST, dokumen, desain dan catatan proyek lama tetap tampil.
+- Setelah preview lulus, merge ke main. Tidak ada migrasi SQL yang diperlukan. Jangan mengakses atau mengubah proyek Supabase yang lain.
