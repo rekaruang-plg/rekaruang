@@ -168,18 +168,24 @@ create trigger rr_validate_finance_close before update on public.projects
 create or replace function public.rr_guard_transaction_when_closed()
 returns trigger language plpgsql
 set search_path = public, pg_temp as $$
+declare
+  closed_at timestamptz;
 begin
-  if exists (
-    select 1 from public.projects p
-    where p.id=(case when tg_op='INSERT' then new.project_id else old.project_id end)
-      and p.finance_closed_at is not null
-  ) then
+  -- FOR UPDATE membuat pencatatan transaksi dan tutup keuangan saling menunggu,
+  -- sehingga tidak ada transaksi baru yang lolos setelah snapshot diambil.
+  select finance_closed_at into closed_at
+  from public.projects
+  where id=(case when tg_op='INSERT' then new.project_id else old.project_id end)
+  for update;
+  if closed_at is not null then
     raise exception 'Transaksi terkunci: keuangan proyek sudah ditutup';
   end if;
-  if tg_op='UPDATE' and exists (
-    select 1 from public.projects p where p.id=new.project_id and p.finance_closed_at is not null
-  ) then
-    raise exception 'Tidak dapat memindahkan transaksi ke proyek yang keuangannya ditutup';
+  if tg_op='UPDATE' and new.project_id is distinct from old.project_id then
+    select finance_closed_at into closed_at
+    from public.projects where id=new.project_id for update;
+    if closed_at is not null then
+      raise exception 'Tidak dapat memindahkan transaksi ke proyek yang keuangannya ditutup';
+    end if;
   end if;
   if tg_op='DELETE' then return old; else return new; end if;
 end;
