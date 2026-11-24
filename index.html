@@ -107,6 +107,7 @@
       <input type="hidden" name="id"><input type="hidden" name="project_id">
       <div class="form-grid">
         <label>Jenis Pekerjaan<select id="workItemType" class="input" name="work_name" required><option>Kitchen Set Atas</option><option>Kitchen Set Bawah</option><option>Backdrop TV</option><option>Lemari</option><option>Walk-in Closet</option><option>Meja Rias</option><option>Wall Panel</option><option>Dipan</option><option>Pekerjaan Custom</option></select></label>
+        <label id="customWorkNameLabel" class="hidden">Nama Pekerjaan Lainnya<input id="customWorkName" class="input" name="custom_work_name" placeholder="Contoh: Kabinet Display / Meja Island" maxlength="120"></label>
         <label id="kitchenModeLabel">Ukuran Kitchen Set<select id="kitchenMode" class="input" name="measurement_mode"><option value="kitchen_standard">Standar (meter lari)</option><option value="area">Nonstandar (panjang × tinggi)</option></select></label>
         <label>Panjang (cm)<input class="input" name="length_cm" type="number" min="0.01" step="0.01" required></label>
         <label id="workItemHeightLabel">Tinggi (cm)<input id="workItemHeight" class="input" name="height_cm" type="number" min="0.01" step="0.01"></label>
