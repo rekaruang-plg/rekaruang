@@ -82,7 +82,8 @@ function renderProfitDistributionOverview(){
   const list=state.projects.filter(x=>!!x.finance_closed_at);
   const total=list.reduce((s,p)=>s+Number(p.finance_close_profit||0),0);
   const paid=list.reduce((s,p)=>s+profitShareTotal(p.id),0);
-  const sum=`<div class="work-volume-summary"><div><span>Total Laba Proyek Ditutup</span><strong>${money(total)}</strong></div><div><span>Bagi Hasil Tercatat</span><strong>${money(paid)}</strong></div><div><span>Belum Dibagikan</span><strong>${money(Math.max(0,total-paid))}</strong></div></div>`;
+  const available=list.reduce((s,p)=>s+profitShareRemaining(p.id),0);
+  const sum=`<div class="work-volume-summary"><div><span>Total Laba Proyek Ditutup</span><strong>${money(total)}</strong></div><div><span>Bagi Hasil Tercatat</span><strong>${money(paid)}</strong></div><div><span>Belum Dibagikan</span><strong>${money(available)}</strong></div></div>`;
   const rows=list.map(p=>`<tr><td>${esc(p.name)}</td><td>${dateID(p.finance_closed_at?.slice(0,10))}</td><td>${money(p.finance_close_profit)}</td><td>${money(profitShareTotal(p.id))}</td><td>${money(profitShareRemaining(p.id))}</td><td><button class="btn ghost small" data-action="jump-profit" data-id="${p.id}">Lihat</button></td></tr>`).join('');
   document.querySelector('#profitDistributionOverview').innerHTML=sum+`<div class="table-wrap"><table><thead><tr><th>Proyek</th><th>Tanggal Tutup</th><th>Laba Final</th><th>Dibagikan</th><th>Saldo Laba</th><th></th></tr></thead><tbody>${rows||'<tr><td colspan="6">Belum ada proyek yang ditutup keuangannya.</td></tr>'}</tbody></table></div>`;
 }
@@ -114,6 +115,10 @@ function openProfitShareDialog(id){
   document.querySelector('#profitShareDialog').showModal();
 }
 
+function updateProfitSharePercent(){
+  const f=document.querySelector('#profitShareForm'),p=projectById(f.elements.project_id.value),profit=Number(p?.finance_close_profit||0),amount=Number(f.elements.amount.value||0);
+  f.elements.share_percent.value=profit>0&&amount>0?Math.min(100,Math.round(amount/profit*10000)/100):'';
+}
 function updateProfitShareAmount(){
   const f=document.querySelector('#profitShareForm'),percent=Number(f.elements.share_percent.value);
   const p=projectById(f.elements.project_id.value);
@@ -139,4 +144,5 @@ document.querySelector('#kitchenMode').addEventListener('change',updateVolumePre
 document.querySelectorAll('#workItemForm input').forEach(el=>el.addEventListener('input',updateVolumePreview));
 document.querySelector('#workItemForm').addEventListener('submit',submitWorkItem);
 document.querySelector('#profitSharePercent').addEventListener('input',updateProfitShareAmount);
+document.querySelector('#profitShareAmount').addEventListener('input',updateProfitSharePercent);
 document.querySelector('#profitShareForm').addEventListener('submit',submitProfitShare);
