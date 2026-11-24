@@ -26,6 +26,9 @@ function renderWorkItemsPane(id){
 function updateVolumePreview(){
   const f=document.querySelector('#workItemForm');
   const kitchen=isKitchenWork(f.elements.work_name.value);
+  const custom=f.elements.work_name.value==='Pekerjaan Custom';
+  document.querySelector('#customWorkNameLabel').classList.toggle('hidden',!custom);
+  f.elements.custom_work_name.required=custom;
   document.querySelector('#kitchenModeLabel').classList.toggle('hidden',!kitchen);
   if(!kitchen)f.elements.measurement_mode.value='area';
   const standard=kitchen&&f.elements.measurement_mode.value==='kitchen_standard';
@@ -41,7 +44,11 @@ function openWorkItemDialog(projectId,workId=null){
   const f=document.querySelector('#workItemForm');f.reset();f.elements.id.value='';f.elements.project_id.value=projectId;
   document.querySelector('#workItemDialogTitle').textContent=workId?'Edit Rincian Pekerjaan':'Tambah Rincian Pekerjaan';
   const item=workId?state.workItems.find(x=>x.id===workId&&x.project_id===projectId):null;
-  if(item)Object.entries(item).forEach(([k,v])=>{if(f.elements[k]&&k!=='volume_value')f.elements[k].value=v??''});
+  if(item){Object.entries(item).forEach(([k,v])=>{if(f.elements[k]&&k!=='volume_value')f.elements[k].value=v??''});
+    if(![...f.elements.work_name.options].some(o=>o.value===item.work_name)){
+      f.elements.work_name.value='Pekerjaan Custom';f.elements.custom_work_name.value=item.work_name;
+    }
+  }
   if(!item){f.elements.work_name.value='Kitchen Set Atas';f.elements.measurement_mode.value='kitchen_standard';f.elements.quantity.value='1'}
   updateVolumePreview();document.querySelector('#workItemDialog').showModal();
 }
@@ -49,6 +56,9 @@ function openWorkItemDialog(projectId,workId=null){
 async function submitWorkItem(e){
   e.preventDefault();const form=e.currentTarget;const fd=Object.fromEntries(new FormData(form).entries());
   const id=fd.id;delete fd.id;const isKitchen=isKitchenWork(fd.work_name);
+  if(fd.work_name==='Pekerjaan Custom')fd.work_name=String(fd.custom_work_name||'').trim();
+  delete fd.custom_work_name;
+  if(!fd.work_name){alert('Masukkan nama pekerjaan.');return}
   fd.measurement_mode=isKitchen?fd.measurement_mode:'area';
   fd.length_cm=Number(fd.length_cm);fd.quantity=Number(fd.quantity);fd.height_cm=fd.measurement_mode==='kitchen_standard'?null:Number(fd.height_cm);fd.width_cm=fd.width_cm===''?null:Number(fd.width_cm);
   fd.notes=fd.notes?.trim()||null;
@@ -141,7 +151,9 @@ async function submitProfitShare(e){
 
 document.querySelector('#workItemType').addEventListener('change',updateVolumePreview);
 document.querySelector('#kitchenMode').addEventListener('change',updateVolumePreview);
-document.querySelectorAll('#workItemForm input').forEach(el=>el.addEventListener('input',updateVolumePreview));
+document.querySelectorAll('#workItemForm input').forEach(el=>{
+  if(el.id!=='customWorkName')el.addEventListener('input',updateVolumePreview);
+});
 document.querySelector('#workItemForm').addEventListener('submit',submitWorkItem);
 document.querySelector('#profitSharePercent').addEventListener('input',updateProfitShareAmount);
 document.querySelector('#profitShareAmount').addEventListener('input',updateProfitSharePercent);
