@@ -76,6 +76,7 @@
 
       <section id="financeView" class="view">
         <div id="financeSummary" class="metrics"></div>
+        <section class="panel"><div class="panel-head"><div><h2>Rekap Bagi Hasil</h2><p class="muted">Hanya proyek yang selesai dan sudah ditutup keuangannya.</p></div></div><div id="profitDistributionOverview"></div></section>
         <section class="panel"><div class="panel-head"><h2>Semua Transaksi</h2></div><div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Proyek</th><th>Jenis</th><th>Kategori</th><th>Keterangan</th><th>Nominal</th></tr></thead><tbody id="allTransactionsBody"></tbody></table></div></section>
       </section>
 
@@ -100,6 +101,41 @@
 
   <dialog id="transactionDialog" class="modal"><form id="transactionForm" class="modal-card"><div class="modal-head"><h2>Tambah Transaksi</h2><button type="button" class="icon-btn" data-close="transactionDialog">×</button></div><input type="hidden" name="project_id"><div class="form-grid"><label>Jenis<select id="txType" class="input" name="type"><option value="income">Pemasukan</option><option value="expense">Pengeluaran</option></select></label><label>Tanggal<input class="input" name="tx_date" type="date" required></label><label id="incomeCategoryLabel">Kategori Pemasukan<input class="input" name="income_category" placeholder="DP / Progress / Pelunasan"></label><label id="expenseCategoryLabel" class="hidden">Kategori Pengeluaran<select class="input" name="expense_category"><option>Bahan</option><option>Jasa</option><option>Design</option></select></label><label>Nominal (Rp)<input class="input" name="amount" type="number" min="0" step="1000" required></label><label class="span-2">Keterangan<input class="input" name="description" required></label></div><div class="modal-actions"><button type="button" class="btn ghost" data-close="transactionDialog">Batal</button><button class="btn primary" type="submit">Simpan</button></div></form></dialog>
 
+  <dialog id="workItemDialog" class="modal">
+    <form id="workItemForm" class="modal-card">
+      <div class="modal-head"><h2 id="workItemDialogTitle">Rincian Pekerjaan</h2><button type="button" class="icon-btn" data-close="workItemDialog">×</button></div>
+      <input type="hidden" name="id"><input type="hidden" name="project_id">
+      <div class="form-grid">
+        <label>Jenis Pekerjaan<select id="workItemType" class="input" name="work_name" required><option>Kitchen Set Atas</option><option>Kitchen Set Bawah</option><option>Backdrop TV</option><option>Lemari</option><option>Walk-in Closet</option><option>Meja Rias</option><option>Wall Panel</option><option>Dipan</option><option>Pekerjaan Custom</option></select></label>
+        <label id="customWorkNameLabel" class="hidden">Nama Pekerjaan Lainnya<input id="customWorkName" class="input" name="custom_work_name" placeholder="Contoh: Kabinet Display / Meja Island" maxlength="120"></label>
+        <label id="kitchenModeLabel">Ukuran Kitchen Set<select id="kitchenMode" class="input" name="measurement_mode"><option value="kitchen_standard">Standar (meter lari)</option><option value="area">Nonstandar (panjang × tinggi)</option></select></label>
+        <label>Panjang (cm)<input class="input" name="length_cm" type="number" min="0.01" step="0.01" required></label>
+        <label id="workItemHeightLabel">Tinggi (cm)<input id="workItemHeight" class="input" name="height_cm" type="number" min="0.01" step="0.01"></label>
+        <label>Lebar/Kedalaman (cm) — opsional<input class="input" name="width_cm" type="number" min="0" step="0.01"></label>
+        <label>Jumlah Unit<input class="input" name="quantity" type="number" min="1" step="1" required value="1"></label>
+        <label class="span-2">Keterangan / Lokasi Pekerjaan<textarea class="input" name="notes" rows="2" placeholder="Contoh: kabinet bawah area kompor"></textarea></label>
+      </div>
+      <div id="workVolumePreview" class="notice"></div>
+      <div class="modal-actions"><button class="btn ghost" type="button" data-close="workItemDialog">Batal</button><button class="btn primary" type="submit">Simpan Rincian</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="profitShareDialog" class="modal">
+    <form id="profitShareForm" class="modal-card">
+      <div class="modal-head"><h2>Catat Bagi Hasil</h2><button type="button" class="icon-btn" data-close="profitShareDialog">×</button></div>
+      <input type="hidden" name="project_id">
+      <div id="profitShareNotice" class="notice"></div>
+      <div class="form-grid">
+        <label>Penerima Bagi Hasil<input class="input" name="recipient_name" required placeholder="Nama mitra / pemilik"></label>
+        <label>Tanggal Pembagian<input class="input" name="paid_date" type="date" required></label>
+        <label>Persentase dari Laba (%) — opsional<input id="profitSharePercent" class="input" name="share_percent" type="number" min="0.01" max="100" step="0.01"></label>
+        <label>Nominal Dibagikan (Rp)<input id="profitShareAmount" class="input" name="amount" type="number" min="1" step="1" required></label>
+        <label class="span-2">Catatan<input class="input" name="notes" placeholder="Transfer / tunai / keterangan pembagian"></label>
+      </div>
+      <div class="modal-actions"><button class="btn ghost" type="button" data-close="profitShareDialog">Batal</button><button class="btn primary" type="submit">Simpan Bagi Hasil</button></div>
+    </form>
+  </dialog>
+
   <dialog id="progressDialog" class="modal"><form id="progressForm" class="modal-card"><div class="modal-head"><h2>Update Progress Proyek</h2><button type="button" class="icon-btn" data-close="progressDialog">×</button></div><input type="hidden" name="project_id"><div class="form-grid"><label>Tahap<select class="input" name="stage"><option>Pengajuan</option><option>Deal</option><option>Design AI</option><option>Design Fix</option><option>Pengerjaan</option><option>Pemasangan</option><option>Selesai</option><option>Hold</option></select></label><label>Tanggal<input class="input" name="progress_date" type="date" required></label><label class="span-2">Catatan Progress<textarea class="input" name="notes" rows="4" placeholder="Contoh: client approve desain, produksi 50%, pemasangan kabinet bawah selesai..."></textarea></label></div><div id="progressWarning" class="notice hidden"></div><div class="modal-actions"><button type="button" class="btn ghost" data-close="progressDialog">Batal</button><button class="btn primary" type="submit">Simpan Progress</button></div></form></dialog>
 
   <dialog id="fileDialog" class="modal"><form id="fileForm" class="modal-card"><div class="modal-head"><h2 id="fileDialogTitle">Upload File</h2><button type="button" class="icon-btn" data-close="fileDialog">×</button></div><input type="hidden" name="project_id"><input type="hidden" name="file_type"><div class="stack"><label>File<input class="input" name="files" type="file" multiple required accept="image/*,application/pdf"></label><label>Caption / Keterangan<input class="input" name="caption" placeholder="Contoh: Opsi AI v2 / Design fix disetujui client"></label><div id="fileUploadHint" class="notice"></div></div><div class="modal-actions"><button type="button" class="btn ghost" data-close="fileDialog">Batal</button><button class="btn primary" type="submit">Upload</button></div></form></dialog>
@@ -112,6 +148,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="config.js"></script>
+  <script src="features.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

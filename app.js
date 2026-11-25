@@ -39,7 +39,7 @@ let session = null;
 let activeProjectId = null;
 let activeBast = null;
 let signatureDirty = {client:false,contractor:false};
-let state = {projects:[],transactions:[],progress:[],files:[],basts:[],documents:[],settings:{business_name:'Reka Ruang'}};
+let state = {projects:[],transactions:[],progress:[],files:[],basts:[],documents:[],workItems:[],profitDistributions:[],settings:{business_name:'Reka Ruang'}};
 
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600)}
 function showGate(id){['#setupScreen','#loginScreen','#appShell'].forEach(x=>$(x).classList.add('hidden'));$(id).classList.remove('hidden')}
@@ -77,7 +77,7 @@ async function enterApp(){
 async function loadData(){
   const queries=[
     db.from('projects').select('*').order('created_at',{ascending:false}),
-    db.from('transactions').select('*').order('tx_date',{ascending:false}),
+    rrReadTransactions(),
     db.from('project_progress').select('*').order('progress_date',{ascending:false}),
     db.from('project_files').select('*').order('created_at',{ascending:false}),
     db.from('basts').select('*').order('created_at',{ascending:false}),
@@ -86,9 +86,9 @@ async function loadData(){
   ];
   const [p,t,pr,f,b,d,s]=await Promise.all(queries);
   const err=[p,t,pr,f,b,d,s].find(x=>x.error)?.error;if(err)throw err;
-  state.projects=p.data||[];state.transactions=t.data||[];state.progress=pr.data||[];state.files=f.data||[];state.basts=b.data||[];state.documents=d.data||[];state.settings=s.data||{id:'company',business_name:'Reka Ruang'};
+  state.projects=rrHydrateProjects(p.data||[]);state.transactions=t.data||[];state.progress=pr.data||[];state.files=f.data||[];state.basts=b.data||[];state.documents=d.data||[];state.settings=s.data||{id:'company',business_name:'Reka Ruang'};
 }
-async function refresh(openDetail=true){await loadData();renderAll();if(openDetail&&activeProjectId&&$('#projectDetailDialog').open)renderProjectDetail(activeProjectId)}
+async function refresh(openDetail=true){const tab=$('#projectDetailContent .tab-btn.active')?.dataset.tab;await loadData();renderAll();if(openDetail&&activeProjectId&&$('#projectDetailDialog').open){renderProjectDetail(activeProjectId);if(tab)$('[data-tab="'+tab+'"]',$('#projectDetailContent'))?.click()}}
 
 function projectById(id){return state.projects.find(x=>x.id===id)}
 function financials(projectId){
@@ -103,7 +103,7 @@ function stagePct(status){if(status==='Hold')return 0;const i=STAGES.indexOf(sta
 function statusPill(s){return `<span class="pill ${s==='Selesai'?'done':s==='Pemasangan'?'warn':''}">${esc(s)}</span>`}
 function empty(msg){return `<div class="empty">${esc(msg)}</div>`}
 
-function renderAll(){renderDashboard();renderProjects();renderFinance();renderDocuments();renderSettings();populateDocProjects()}
+function renderAll(){renderDashboard();renderProjects();renderFinance();renderDocuments();renderSettings();populateDocProjects();renderProfitDistributionOverview()}
 function renderDashboard(){
   const totalValue=state.projects.reduce((a,p)=>a+Number(p.project_value||0),0);
   const income=state.transactions.filter(x=>x.type==='income').reduce((a,b)=>a+Number(b.amount),0);
@@ -132,8 +132,9 @@ $('#projectSearch').oninput=renderProjects;$('#projectStatusFilter').onchange=re
 function renderFinance(){
   const income=state.transactions.filter(x=>x.type==='income').reduce((a,b)=>a+Number(b.amount),0), expenses=state.transactions.filter(x=>x.type==='expense');
   const exp=expenses.reduce((a,b)=>a+Number(b.amount),0);const by={Bahan:0,Jasa:0,Design:0};expenses.forEach(x=>by[x.expense_category]=(by[x.expense_category]||0)+Number(x.amount));
-  $('#financeSummary').innerHTML=metric('Pemasukan',money(income),'Semua proyek')+metric('Pengeluaran',money(exp),'Semua proyek')+metric('Bahan',money(by.Bahan),'Pengeluaran bahan')+metric('Jasa',money(by.Jasa),'Tukang / pemasangan')+metric('Design',money(by.Design),'Biaya design');
-  $('#allTransactionsBody').innerHTML=state.transactions.length?state.transactions.map(x=>`<tr><td>${dateID(x.tx_date)}</td><td>${esc(projectById(x.project_id)?.name||'-')}</td><td>${x.type==='income'?'Pemasukan':'Pengeluaran'}</td><td>${esc(x.type==='income'?(x.income_category||'-'):(x.expense_category||'-'))}</td><td>${esc(x.description)}</td><td class="${x.type==='income'?'money-in':'money-out'}">${x.type==='income'?'+':'-'} ${money(x.amount)}</td></tr>`).join(''):`<tr><td colspan="6">Belum ada transaksi.</td></tr>`;
+  $('#financeSummary').innerHTML=metric('Pemasukan',money(income),'Semua proyek')+metric('Pengeluaran',money(exp),'Semua proyek')+metric('Bahan',money(by.Bahan),'Pengeluaran bahan')+metric('Jasa',money(by.Jasa),'Tukang / pemasangan')+metric('Design',money(by.Design),'Biaya design')+metric('Bagi Hasil',money(state.profitDistributions.reduce((s,x)=>s+Number(x.amount||0),0)),'Laba yang telah dibagikan')+metric('Kas Setelah Bagi Hasil',money(income-exp-state.profitDistributions.reduce((s,x)=>s+Number(x.amount||0),0)),'Pemasukan dikurangi biaya dan distribusi laba');
+  const ledger=[...state.transactions,...state.profitDistributions.map(x=>({...x,type:'distribution',tx_date:x.paid_date,description:x.recipient_name+(x.notes?' — '+x.notes:'')}))].sort((a,b)=>String(b.tx_date).localeCompare(String(a.tx_date)));
+  $('#allTransactionsBody').innerHTML=ledger.length?ledger.map(x=>`<tr><td>${dateID(x.tx_date)}</td><td>${esc(projectById(x.project_id)?.name||'-')}</td><td>${x.type==='income'?'Pemasukan':x.type==='distribution'?'Distribusi Laba':'Pengeluaran'}</td><td>${esc(x.type==='distribution'?'Bagi Hasil':x.type==='income'?(x.income_category||'-'):(x.expense_category||'-'))}</td><td>${esc(x.description)}</td><td class="${x.type==='income'?'money-in':'money-out'}">${x.type==='income'?'+':'-'} ${money(x.amount)}</td></tr>`).join(''):`<tr><td colspan="6">Belum ada transaksi.</td></tr>`;
 }
 
 function renderDocuments(){
@@ -142,25 +143,27 @@ function renderDocuments(){
 function populateDocProjects(){$('#docProjectSelect').innerHTML='<option value="">Pilih proyek...</option>'+state.projects.map(p=>`<option value="${p.id}">${esc(p.project_code||'')} — ${esc(p.name)}</option>`).join('')}
 function renderSettings(){const f=$('#settingsForm');Object.entries(state.settings||{}).forEach(([k,v])=>{if(f.elements[k])f.elements[k].value=v||''})}
 
+let rrProjectEditRaw;
 function openProjectForm(id=null){
   const f=$('#projectForm');f.reset();f.elements.id.value='';$('#projectDialogTitle').textContent=id?'Edit Proyek':'Proyek Baru';
-  if(id){const p=projectById(id);Object.entries(p).forEach(([k,v])=>{if(f.elements[k])f.elements[k].value=v??''});f.elements.id.value=id}
+  rrProjectEditRaw=undefined;
+  if(id){const p=projectById(id);if(p._rrInvalid)return alert('Data internal proyek tidak terbaca. Jangan timpa catatan.');rrProjectEditRaw=p._rrRawNotes;Object.entries(p).forEach(([k,v])=>{if(f.elements[k])f.elements[k].value=v??''});f.elements.id.value=id}
   $('#projectDialog').showModal();
 }
 $('#newProjectBtn').onclick=()=>openProjectForm();
 $('#projectForm').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget,fd=Object.fromEntries(new FormData(f).entries());const id=fd.id;delete fd.id;fd.project_value=Number(fd.project_value||0);Object.keys(fd).forEach(k=>{if(fd[k]==='')fd[k]=null});try{
-  if(id){const {error}=await db.from('projects').update(fd).eq('id',id);if(error)throw error}
+  if(id){await rrWriteProject(id,(meta,row)=>{if(meta.close&&Number(fd.project_value)!==Number(row.project_value))throw Error('Nilai proyek terkunci setelah tutup keuangan.');return {meta,text:fd.notes??'',patch:Object.fromEntries(Object.entries(fd).filter(([k])=>k!=='notes'))}},rrProjectEditRaw)}
   else{const {data:num,error:numErr}=await db.rpc('next_document_number',{p_type:'project'});if(numErr)throw numErr;fd.project_code=num;fd.status='Pengajuan';fd.created_by=session.user.id;const {data:p,error}=await db.from('projects').insert(fd).select().single();if(error)throw error;await db.from('project_progress').insert({project_id:p.id,stage:'Pengajuan',progress_date:fd.start_date||today(),notes:'Proyek dibuat / pengajuan masuk.',created_by:session.user.id})}
-  $('#projectDialog').close();await refresh(false);toast('Proyek tersimpan')
+  $('#projectDialog').close();await refresh();toast('Proyek tersimpan')
 }catch(err){alert('Gagal menyimpan proyek: '+err.message)}};
 
 function renderProjectDetail(id){
   activeProjectId=id;const p=projectById(id);if(!p)return;const f=financials(id);const tx=state.transactions.filter(x=>x.project_id===id);const progress=state.progress.filter(x=>x.project_id===id);const files=state.files.filter(x=>x.project_id===id);const basts=state.basts.filter(x=>x.project_id===id);const docs=state.documents.filter(x=>x.project_id===id);
   $('#detailTitle').textContent=p.name;$('#detailMeta').textContent=`${p.project_code||''} • ${p.client_name}${p.location?' • '+p.location:''}`;
   const summary=`<div class="detail-summary">${summaryCard('Nilai Proyek',money(p.project_value))}${summaryCard('Pemasukan',money(f.income))}${summaryCard('Pengeluaran',money(f.expense))}${summaryCard('Sisa Tagihan',money(f.receivable))}${summaryCard('Margin Kotor',money(f.margin))}</div>`;
-  const tabs=`<div class="detail-tabs"><button class="tab-btn active" data-tab="overview">Overview</button><button class="tab-btn" data-tab="finance">Keuangan</button><button class="tab-btn" data-tab="design">Design</button><button class="tab-btn" data-tab="progress">Progress</button><button class="tab-btn" data-tab="bast">BAST</button><button class="tab-btn" data-tab="docs">Dokumen</button><button class="tab-btn" data-tab="final">Hasil Akhir</button></div>`;
-  const overview=`<section class="tab-pane active" data-pane="overview"><div class="detail-actions"><button class="btn primary small" data-action="add-tx" data-id="${id}">+ Transaksi</button><button class="btn ghost small" data-action="update-progress" data-id="${id}">Update Progress</button><button class="btn ghost small" data-action="edit-project" data-id="${id}">Edit Proyek</button></div><div style="display:flex;gap:8px;align-items:center;margin-bottom:15px">${statusPill(p.status)}<strong>${esc(p.status)}</strong></div><h3>Scope Pekerjaan</h3><div class="scope-box">${esc(p.scope||'Belum ada scope.')}</div>${p.notes?`<h3>Catatan Internal</h3><div class="scope-box">${esc(p.notes)}</div>`:''}</section>`;
-  const finance=`<section class="tab-pane" data-pane="finance"><div class="detail-actions"><button class="btn primary small" data-action="add-tx" data-id="${id}">+ Tambah Transaksi</button></div><div class="expense-split">${expenseBox('Bahan',f.byCat.Bahan)}${expenseBox('Jasa',f.byCat.Jasa)}${expenseBox('Design',f.byCat.Design)}</div>${transactionTable(tx)}</section>`;
+  const tabs=`<div class="detail-tabs"><button class="tab-btn active" data-tab="overview">Overview</button><button class="tab-btn" data-tab="finance">Keuangan</button><button class="tab-btn" data-tab="volume">Volume Pekerjaan</button><button class="tab-btn" data-tab="profit">Bagi Hasil</button><button class="tab-btn" data-tab="design">Design</button><button class="tab-btn" data-tab="progress">Progress</button><button class="tab-btn" data-tab="bast">BAST</button><button class="tab-btn" data-tab="docs">Dokumen</button><button class="tab-btn" data-tab="final">Hasil Akhir</button></div>`;
+  const overview=`<section class="tab-pane active" data-pane="overview"><div class="detail-actions">${p.finance_closed_at?'':`<button class="btn primary small" data-action="add-tx" data-id="${id}">+ Transaksi</button>`}<button class="btn ghost small" data-action="update-progress" data-id="${id}">Update Progress</button><button class="btn ghost small" data-action="edit-project" data-id="${id}">Edit Proyek</button></div><div style="display:flex;gap:8px;align-items:center;margin-bottom:15px">${statusPill(p.status)}<strong>${esc(p.status)}</strong></div><h3>Scope Pekerjaan</h3><div class="scope-box">${esc(p.scope||'Belum ada scope.')}</div>${p.notes?`<h3>Catatan Internal</h3><div class="scope-box">${esc(p.notes)}</div>`:''}${p._rrInvalid?'<div class="notice warning">Data tambahan proyek tidak terbaca. Simpanan lama dipertahankan; jangan timpa catatan internal.</div>':''}</section>`;
+  const finance=`<section class="tab-pane" data-pane="finance"><div class="detail-actions">${p.finance_closed_at?'<span class="pill done">Transaksi baru diblokir di aplikasi setelah tutup keuangan</span>':`<button class="btn primary small" data-action="add-tx" data-id="${id}">+ Tambah Transaksi</button>`}</div><div class="expense-split">${expenseBox('Bahan',f.byCat.Bahan)}${expenseBox('Jasa',f.byCat.Jasa)}${expenseBox('Design',f.byCat.Design)}</div>${transactionTable(tx)}</section>`;
   const ai=files.filter(x=>x.file_type==='design_ai'),fix=files.filter(x=>x.file_type==='design_fix');
   const design=`<section class="tab-pane" data-pane="design"><div class="detail-actions"><button class="btn primary small" data-action="upload-file" data-id="${id}" data-type="design_ai">Upload Design AI</button><button class="btn ghost small" data-action="upload-file" data-id="${id}" data-type="design_fix">Upload Design Fix</button></div><h3>Design AI / Konsep</h3>${fileGrid(ai)}<h3>Design Fix / Approved</h3>${fileGrid(fix)}</section>`;
   const progressPane=`<section class="tab-pane" data-pane="progress"><div class="detail-actions"><button class="btn primary small" data-action="update-progress" data-id="${id}">+ Update Tahap / Tanggal</button></div>${timelineHtml(p,progress)}</section>`;
@@ -169,7 +172,7 @@ function renderProjectDetail(id){
   const docsPane=`<section class="tab-pane" data-pane="docs"><div class="detail-actions"><button class="btn primary small" data-action="new-doc" data-id="${id}" data-type="invoice">Invoice</button><button class="btn ghost small" data-action="new-doc" data-id="${id}" data-type="receipt">Kwitansi</button><button class="btn ghost small" data-action="new-doc" data-id="${id}" data-type="proposal">Proposal</button><button class="btn ghost small" data-action="new-doc" data-id="${id}" data-type="spk">SPK</button></div>${docs.length?docs.map(d=>`<div class="doc-row"><div><strong>${esc(d.doc_number)}</strong><span>${esc(docLabel(d.doc_type))} • ${dateID(d.issued_date)}</span></div><div class="detail-actions"><button class="btn ghost small" data-action="reprint-doc" data-id="${d.id}">Preview</button><button class="btn primary small" data-action="download-doc" data-id="${d.id}">Download PDF</button></div></div>`).join(''):empty('Belum ada dokumen untuk proyek ini.')}</section>`;
   const finals=files.filter(x=>x.file_type==='final_photo');
   const finalPane=`<section class="tab-pane" data-pane="final"><div class="detail-actions"><button class="btn primary small" data-action="upload-file" data-id="${id}" data-type="final_photo">+ Upload Foto Hasil Akhir</button></div><div class="notice">Upload foto hasil akhir proyek dari beberapa sudut. Minimal 1 foto diperlukan sebelum status proyek dapat menjadi Selesai.</div>${fileGrid(finals)}</section>`;
-  $('#projectDetailContent').innerHTML=summary+tabs+overview+finance+design+progressPane+bast+docsPane+finalPane;
+  $('#projectDetailContent').innerHTML=summary+tabs+overview+finance+renderWorkItemsPane(id)+renderProfitSharePane(id)+design+progressPane+bast+docsPane+finalPane;
   hydrateFilePreviews(files);
 }
 function summaryCard(l,v){return `<div class="summary-card"><span>${esc(l)}</span><strong>${v}</strong></div>`}
@@ -183,7 +186,7 @@ async function hydrateFilePreviews(files){for(const f of files.filter(x=>x.mime_
 function openTransaction(id){const f=$('#transactionForm');f.reset();f.elements.project_id.value=id;f.elements.tx_date.value=today();toggleTxCategory();$('#transactionDialog').showModal()}
 function toggleTxCategory(){const expense=$('#txType').value==='expense';$('#expenseCategoryLabel').classList.toggle('hidden',!expense);$('#incomeCategoryLabel').classList.toggle('hidden',expense)}
 $('#txType').onchange=toggleTxCategory;
-$('#transactionForm').onsubmit=async e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(e.currentTarget).entries());fd.amount=Number(fd.amount);fd.expense_category=fd.type==='expense'?fd.expense_category:null;fd.income_category=fd.type==='income'?(fd.income_category||null):null;fd.created_by=session.user.id;try{const {error}=await db.from('transactions').insert(fd);if(error)throw error;$('#transactionDialog').close();await refresh();toast('Transaksi tersimpan')}catch(err){alert('Gagal menyimpan transaksi: '+err.message)}};
+$('#transactionForm').onsubmit=async e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(e.currentTarget).entries());if(projectById(fd.project_id)?.finance_closed_at){alert('Keuangan proyek sudah ditutup. Transaksi operasional tidak bisa ditambah.');return}fd.amount=Number(fd.amount);fd.expense_category=fd.type==='expense'?fd.expense_category:null;fd.income_category=fd.type==='income'?(fd.income_category||null):null;fd.created_by=session.user.id;try{await rrRequireOpen(fd.project_id);const {error}=await db.from('transactions').insert(fd);if(error)throw error;$('#transactionDialog').close();await refresh();toast('Transaksi tersimpan')}catch(err){alert('Gagal menyimpan transaksi: '+err.message)}};
 
 function openProgress(id){const f=$('#progressForm');f.reset();f.elements.project_id.value=id;f.elements.progress_date.value=today();f.elements.stage.value=projectById(id)?.status==='Hold'?'Pengajuan':projectById(id)?.status||'Pengajuan';updateProgressWarning();$('#progressDialog').showModal()}
 $('#progressForm').elements.stage.onchange=updateProgressWarning;
@@ -192,7 +195,7 @@ $('#progressForm').onsubmit=async e=>{e.preventDefault();const fd=Object.fromEnt
   const b=state.basts.filter(x=>x.project_id===id),inst=b.find(x=>x.bast_type==='installation'),fin=b.find(x=>x.bast_type==='final'),photos=state.files.filter(x=>x.project_id===id&&x.file_type==='final_photo');
   if(inst?.status!=='signed'||fin?.status!=='signed'||photos.length<1){alert('Belum bisa diselesaikan. Pastikan BAST Pemasangan Signed, BAST Akhir Signed, dan minimal 1 foto hasil akhir sudah diupload.');return}
 }
-  try{const payload={...fd,created_by:session.user.id};const {error}=await db.from('project_progress').upsert(payload,{onConflict:'project_id,stage'});if(error)throw error;const {error:e2}=await db.from('projects').update({status:fd.stage}).eq('id',id);if(e2)throw e2;$('#progressDialog').close();await refresh();toast('Progress diperbarui')}catch(err){alert('Gagal update progress: '+err.message)}};
+  try{const current=await rrGetProject(id);if(current.meta.close&&fd.stage!==current.row.status)throw Error('Status proyek tidak dapat diubah setelah tutup keuangan.');const payload={...fd,created_by:session.user.id};const {error}=await db.from('project_progress').upsert(payload,{onConflict:'project_id,stage'});if(error)throw error;const {error:e2}=await db.from('projects').update({status:fd.stage}).eq('id',id);if(e2)throw e2;$('#progressDialog').close();await refresh();toast('Progress diperbarui')}catch(err){alert('Gagal update progress: '+err.message)}};
 
 function openFileDialog(id,type){const f=$('#fileForm');f.reset();f.elements.project_id.value=id;f.elements.file_type.value=type;const labels={design_ai:'Upload Design AI / Konsep',design_fix:'Upload Design Fix / Approved',final_photo:'Upload Foto Hasil Akhir'};$('#fileDialogTitle').textContent=labels[type]||'Upload File';$('#fileUploadHint').innerHTML=type==='design_fix'?'<b>Design Fix</b> sebaiknya hanya berisi desain yang sudah disetujui / menjadi acuan pengerjaan.':type==='final_photo'?'<b>Foto final</b> menjadi dokumentasi serah terima proyek.':'Bisa upload gambar atau PDF. File disimpan di Supabase Storage.';$('#fileDialog').showModal()}
 $('#fileForm').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget,files=[...f.elements.files.files],projectId=f.elements.project_id.value,type=f.elements.file_type.value,caption=f.elements.caption.value;const btn=f.querySelector('button[type=submit]');btn.disabled=true;btn.textContent='Uploading...';try{
@@ -424,6 +427,13 @@ document.addEventListener('click',async e=>{
   if(a.dataset.action==='open-project'){renderProjectDetail(id);$('#projectDetailDialog').showModal()}
   if(a.dataset.action==='edit-project')openProjectForm(id);
   if(a.dataset.action==='add-tx')openTransaction(id);
+  if(a.dataset.action==='add-work-item')openWorkItemDialog(id);
+  if(a.dataset.action==='edit-work-item')openWorkItemDialog(id,a.dataset.workId);
+  if(a.dataset.action==='delete-work-item')deleteWorkItem(a.dataset.workId);
+  if(a.dataset.action==='close-finance')closeProjectFinance(id);
+  if(a.dataset.action==='new-profit-share')openProfitShareDialog(id);
+  if(a.dataset.action==='jump-profit'){renderProjectDetail(id);$('#projectDetailDialog').showModal();const tab=$('[data-tab="profit"]',$('#projectDetailContent'));tab?.click()}
+
   if(a.dataset.action==='update-progress')openProgress(id);
   if(a.dataset.action==='upload-file')openFileDialog(id,a.dataset.type);
   if(a.dataset.action==='open-file')openStoredFile(id);
