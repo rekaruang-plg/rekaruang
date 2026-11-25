@@ -91,13 +91,41 @@ function formatVolume(item){
   return `${Number(n||0).toLocaleString('id-ID',{minimumFractionDigits:0,maximumFractionDigits:3})} ${volumeUnit(item)}`
 }
 
+function projectVolumePricing(project,items){
+  let area=0,linear=0;
+  for(const item of items){
+    const volume=Number(item.volume_value??calculatedVolume(item));
+    if(!Number.isFinite(volume)||volume<=0)continue;
+    if(item.measurement_mode==='kitchen_standard')linear+=volume;else area+=volume;
+  }
+  const value=Number(project?.project_value??0);
+  const valid=Number.isFinite(value)&&value>=0;
+  return {area,linear,value,mixed:area>0&&linear>0,
+    perArea:valid&&area>0?value/area:null,
+    perLinear:valid&&linear>0?value/linear:null};
+}
+function volumeNumber(n){return n.toLocaleString('id-ID',{maximumFractionDigits:3})}
+function volumeRate(n,unit){return n===null?'—':money(Math.round(n))+' / '+unit}
+function projectVolumePriceLabel(project){
+  const p=projectVolumePricing(project,state.workItems.filter(x=>x.project_id===project.id));
+  if(!p.area&&!p.linear)return '';
+  if(p.mixed)return 'Volume: '+volumeNumber(p.area)+' m² + '+volumeNumber(p.linear)+' m lari • Lihat rincian tarif';
+  if(p.area)return 'Volume: '+volumeNumber(p.area)+' m² • '+volumeRate(p.perArea,'m²');
+  return 'Volume: '+volumeNumber(p.linear)+' m lari • '+volumeRate(p.perLinear,'m lari');
+}
 function renderWorkItemsPane(id){
   const list=state.workItems.filter(x=>x.project_id===id);
-  const linear=list.filter(x=>x.measurement_mode==='kitchen_standard').reduce((s,x)=>s+Number(x.volume_value??calculatedVolume(x)),0);
-  const area=list.filter(x=>x.measurement_mode!=='kitchen_standard').reduce((s,x)=>s+Number(x.volume_value??calculatedVolume(x)),0);
+  const pricing=projectVolumePricing(projectById(id),list);
+  const {linear,area}=pricing;
   const sums=`<div class="work-volume-summary"><div><span>Volume meter lari</span><strong>${linear.toLocaleString('id-ID',{maximumFractionDigits:3})} m</strong></div><div><span>Volume luas</span><strong>${area.toLocaleString('id-ID',{maximumFractionDigits:3})} m²</strong></div><div><span>Item Pekerjaan</span><strong>${list.length}</strong></div></div>`;
+  const priceRows=[
+    `<div><span>Nilai kontrak proyek</span><strong>${money(pricing.value)}</strong></div>`,
+    ...(area>0?[`<div><span>${pricing.mixed?'Rasio nilai kontrak / luas':'Harga rata-rata per m²'}</span><strong>${volumeRate(pricing.perArea,'m²')}</strong><small>${money(pricing.value)} ÷ ${volumeNumber(area)} m²</small></div>`]:[]),
+    ...(linear>0?[`<div><span>${pricing.mixed?'Rasio nilai kontrak / meter lari':'Harga rata-rata per meter lari'}</span><strong>${volumeRate(pricing.perLinear,'m lari')}</strong><small>${money(pricing.value)} ÷ ${volumeNumber(linear)} m lari</small></div>`]:[])
+  ].join('');
+  const pricingPanel=`<h3>Harga rata-rata proyek berdasarkan volume</h3><div class="work-volume-summary">${priceRows}</div>${pricing.mixed?'<div class="notice warning">Proyek memiliki volume m² dan meter lari. Rasio di atas memakai seluruh nilai kontrak sebagai pembilang; bukan harga satuan aktual tiap pekerjaan. Kedua satuan tidak dijumlahkan. Untuk tarif aktual diperlukan pembagian nilai kontrak berdasarkan kelompok pekerjaan.</div>':!area&&!linear?'<div class="notice">Tambahkan rincian pekerjaan terlebih dahulu untuk menghitung harga rata-rata proyek.</div>':'<div class="notice">Harga rata-rata dihitung dari nilai kontrak proyek dibagi total volume tercatat. Belum tentu sama dengan harga jual masing-masing item.</div>'}`;
   const body=list.map(x=>`<tr><td><strong>${esc(x.work_name)}</strong>${x.notes?`<div class="muted">${esc(x.notes)}</div>`:''}</td><td>${Number(x.length_cm).toLocaleString('id-ID')} cm</td><td>${x.height_cm==null?'-':Number(x.height_cm).toLocaleString('id-ID')+' cm'}</td><td>${x.width_cm==null?'-':Number(x.width_cm).toLocaleString('id-ID')+' cm'}</td><td>${x.quantity}</td><td><strong>${formatVolume(x)}</strong></td><td><button class="btn ghost small" data-action="edit-work-item" data-id="${id}" data-work-id="${x.id}">Edit</button> <button class="btn danger small" data-action="delete-work-item" data-work-id="${x.id}">Hapus</button></td></tr>`).join('');
-  return `<section class="tab-pane" data-pane="volume"><div class="detail-actions"><button class="btn primary small" data-action="add-work-item" data-id="${id}">+ Rincian Pekerjaan</button></div><div class="notice">Untuk kitchen set standar, volume = panjang × jumlah dalam meter lari. Kitchen set nonstandar dan pekerjaan lain = panjang × tinggi × jumlah dalam m². Lebar/kedalaman hanya dicatat, tidak dihitung.</div>${sums}<div class="table-wrap"><table><thead><tr><th>Pekerjaan</th><th>Panjang</th><th>Tinggi</th><th>Lebar</th><th>Unit</th><th>Volume</th><th>Aksi</th></tr></thead><tbody>${body||'<tr><td colspan="7">Belum ada rincian pekerjaan.</td></tr>'}</tbody></table></div></section>`;
+  return `<section class="tab-pane" data-pane="volume"><div class="detail-actions"><button class="btn primary small" data-action="add-work-item" data-id="${id}">+ Rincian Pekerjaan</button></div><div class="notice">Untuk kitchen set standar, volume = panjang × jumlah dalam meter lari. Kitchen set nonstandar dan pekerjaan lain = panjang × tinggi × jumlah dalam m². Lebar/kedalaman hanya dicatat, tidak dihitung.</div>${sums}${pricingPanel}<div class="table-wrap"><table><thead><tr><th>Pekerjaan</th><th>Panjang</th><th>Tinggi</th><th>Lebar</th><th>Unit</th><th>Volume</th><th>Aksi</th></tr></thead><tbody>${body||'<tr><td colspan="7">Belum ada rincian pekerjaan.</td></tr>'}</tbody></table></div></section>`;
 }
 
 function updateVolumePreview(){
