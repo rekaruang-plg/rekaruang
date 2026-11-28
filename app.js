@@ -134,7 +134,7 @@ function renderFinance(){
   const exp=expenses.reduce((a,b)=>a+Number(b.amount),0);const by={Bahan:0,Jasa:0,Design:0};expenses.forEach(x=>by[x.expense_category]=(by[x.expense_category]||0)+Number(x.amount));
   $('#financeSummary').innerHTML=metric('Pemasukan',money(income),'Semua proyek')+metric('Pengeluaran',money(exp),'Semua proyek')+metric('Bahan',money(by.Bahan),'Pengeluaran bahan')+metric('Jasa',money(by.Jasa),'Tukang / pemasangan')+metric('Design',money(by.Design),'Biaya design')+metric('Bagi Hasil',money(state.profitDistributions.reduce((s,x)=>s+Number(x.amount||0),0)),'Laba yang telah dibagikan')+metric('Kas Setelah Bagi Hasil',money(income-exp-state.profitDistributions.reduce((s,x)=>s+Number(x.amount||0),0)),'Pemasukan dikurangi biaya dan distribusi laba');
   const ledger=[...state.transactions,...state.profitDistributions.map(x=>({...x,type:'distribution',tx_date:x.paid_date,description:x.recipient_name+(x.notes?' — '+x.notes:'')}))].sort((a,b)=>String(b.tx_date).localeCompare(String(a.tx_date)));
-  $('#allTransactionsBody').innerHTML=ledger.length?ledger.map(x=>`<tr><td>${dateID(x.tx_date)}</td><td>${esc(projectById(x.project_id)?.name||'-')}</td><td>${x.type==='income'?'Pemasukan':x.type==='distribution'?'Distribusi Laba':'Pengeluaran'}</td><td>${esc(x.type==='distribution'?'Bagi Hasil':x.type==='income'?(x.income_category||'-'):(x.expense_category||'-'))}</td><td>${esc(x.description)}</td><td class="${x.type==='income'?'money-in':'money-out'}">${x.type==='income'?'+':'-'} ${money(x.amount)}</td></tr>`).join(''):`<tr><td colspan="6">Belum ada transaksi.</td></tr>`;
+  $('#allTransactionsBody').innerHTML=ledger.length?ledger.map(x=>`<tr><td>${dateID(x.tx_date)}</td><td>${esc(projectById(x.project_id)?.name||'-')}</td><td>${x.type==='income'?'Pemasukan':x.type==='distribution'?'Distribusi Laba':'Pengeluaran'}</td><td>${esc(x.type==='distribution'?'Bagi Hasil':x.type==='income'?(x.income_category||'-'):(x.expense_category||'-'))}</td><td>${esc(x.description)}</td><td class="${x.type==='income'?'money-in':'money-out'}">${x.type==='income'?'+':'-'} ${money(x.amount)}</td><td>${transactionActions(x)}</td></tr>`).join(''):`<tr><td colspan="7">Belum ada transaksi.</td></tr>`;
 }
 
 function renderDocuments(){
@@ -163,7 +163,7 @@ function renderProjectDetail(id){
   const summary=`<div class="detail-summary">${summaryCard('Nilai Proyek',money(p.project_value))}${summaryCard('Pemasukan',money(f.income))}${summaryCard('Pengeluaran',money(f.expense))}${summaryCard('Sisa Tagihan',money(f.receivable))}${summaryCard('Margin Kotor',money(f.margin))}${projectVolumePriceLabel(p)?summaryCard('Volume & Harga Rata-rata',esc(projectVolumePriceLabel(p))):''}</div>`;
   const tabs=`<div class="detail-tabs"><button class="tab-btn active" data-tab="overview">Overview</button><button class="tab-btn" data-tab="finance">Keuangan</button><button class="tab-btn" data-tab="volume">Volume Pekerjaan</button><button class="tab-btn" data-tab="profit">Bagi Hasil</button><button class="tab-btn" data-tab="design">Design</button><button class="tab-btn" data-tab="progress">Progress</button><button class="tab-btn" data-tab="bast">BAST</button><button class="tab-btn" data-tab="docs">Dokumen</button><button class="tab-btn" data-tab="final">Hasil Akhir</button></div>`;
   const overview=`<section class="tab-pane active" data-pane="overview"><div class="detail-actions">${p.finance_closed_at?'':`<button class="btn primary small" data-action="add-tx" data-id="${id}">+ Transaksi</button>`}<button class="btn ghost small" data-action="update-progress" data-id="${id}">Update Progress</button><button class="btn ghost small" data-action="edit-project" data-id="${id}">Edit Proyek</button></div><div style="display:flex;gap:8px;align-items:center;margin-bottom:15px">${statusPill(p.status)}<strong>${esc(p.status)}</strong></div><h3>Scope Pekerjaan</h3><div class="scope-box">${esc(p.scope||'Belum ada scope.')}</div>${p.notes?`<h3>Catatan Internal</h3><div class="scope-box">${esc(p.notes)}</div>`:''}${p._rrInvalid?'<div class="notice warning">Data tambahan proyek tidak terbaca. Simpanan lama dipertahankan; jangan timpa catatan internal.</div>':''}</section>`;
-  const finance=`<section class="tab-pane" data-pane="finance"><div class="detail-actions">${p.finance_closed_at?'<span class="pill done">Transaksi baru diblokir di aplikasi setelah tutup keuangan</span>':`<button class="btn primary small" data-action="add-tx" data-id="${id}">+ Tambah Transaksi</button>`}</div><div class="expense-split">${expenseBox('Bahan',f.byCat.Bahan)}${expenseBox('Jasa',f.byCat.Jasa)}${expenseBox('Design',f.byCat.Design)}</div>${transactionTable(tx)}</section>`;
+  const finance=`<section class="tab-pane" data-pane="finance"><div class="detail-actions">${p.finance_closed_at?'<span class="pill done">Tambah, edit, dan hapus transaksi diblokir setelah tutup keuangan</span>':`<button class="btn primary small" data-action="add-tx" data-id="${id}">+ Tambah Transaksi</button>`}</div><div class="expense-split">${expenseBox('Bahan',f.byCat.Bahan)}${expenseBox('Jasa',f.byCat.Jasa)}${expenseBox('Design',f.byCat.Design)}</div>${transactionTable(tx)}</section>`;
   const ai=files.filter(x=>x.file_type==='design_ai'),fix=files.filter(x=>x.file_type==='design_fix');
   const design=`<section class="tab-pane" data-pane="design"><div class="detail-actions"><button class="btn primary small" data-action="upload-file" data-id="${id}" data-type="design_ai">Upload Design AI</button><button class="btn ghost small" data-action="upload-file" data-id="${id}" data-type="design_fix">Upload Design Fix</button></div><h3>Design AI / Konsep</h3>${fileGrid(ai)}<h3>Design Fix / Approved</h3>${fileGrid(fix)}</section>`;
   const progressPane=`<section class="tab-pane" data-pane="progress"><div class="detail-actions"><button class="btn primary small" data-action="update-progress" data-id="${id}">+ Update Tahap / Tanggal</button></div>${timelineHtml(p,progress)}</section>`;
@@ -177,16 +177,110 @@ function renderProjectDetail(id){
 }
 function summaryCard(l,v){return `<div class="summary-card"><span>${esc(l)}</span><strong>${v}</strong></div>`}
 function expenseBox(c,v){return `<div class="expense-box"><span>${esc(c)}</span><strong>${money(v)}</strong></div>`}
-function transactionTable(tx){return `<div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Jenis</th><th>Kategori</th><th>Keterangan</th><th>Nominal</th></tr></thead><tbody>${tx.length?tx.map(x=>`<tr><td>${dateID(x.tx_date)}</td><td>${x.type==='income'?'Pemasukan':'Pengeluaran'}</td><td>${esc(x.type==='income'?(x.income_category||'-'):(x.expense_category||'-'))}</td><td>${esc(x.description)}</td><td class="${x.type==='income'?'money-in':'money-out'}">${x.type==='income'?'+':'-'} ${money(x.amount)}</td></tr>`).join(''):`<tr><td colspan="5">Belum ada transaksi.</td></tr>`}</tbody></table></div>`}
+function transactionTable(tx){return `<div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Jenis</th><th>Kategori</th><th>Keterangan</th><th>Nominal</th><th>Aksi</th></tr></thead><tbody>${tx.length?tx.map(x=>`<tr><td>${dateID(x.tx_date)}</td><td>${x.type==='income'?'Pemasukan':'Pengeluaran'}</td><td>${esc(x.type==='income'?(x.income_category||'-'):(x.expense_category||'-'))}</td><td>${esc(x.description)}</td><td class="${x.type==='income'?'money-in':'money-out'}">${x.type==='income'?'+':'-'} ${money(x.amount)}</td><td>${transactionActions(x)}</td></tr>`).join(''):`<tr><td colspan="6">Belum ada transaksi.</td></tr>`}</tbody></table></div>`}
 function timelineHtml(p,recs){const map=Object.fromEntries(recs.map(x=>[x.stage,x]));return `<div class="timeline">${STAGES.map((s,i)=>{const r=map[s],done=!!r,current=p.status===s;return `<div class="timeline-item ${done?'done':''} ${current?'current':''}"><div class="timeline-dot">${done?'✓':i+1}</div><div class="timeline-content"><strong><span>${esc(s)}</span>${['Pemasangan','Selesai'].includes(s)?'<span class="pill warn">BAST wajib</span>':''}</strong><small>${r?dateID(r.progress_date)+(r.notes?' • '+esc(r.notes):''):'Belum ada update'}</small></div></div>`}).join('')}</div>`}
 function bastCard(id,type,title,b,desc){return `<div class="bast-card"><h4>${esc(title)}</h4><p>${esc(desc)}</p><div>${b?(b.status==='signed'?'<span class="pill done">Signed</span>':'<span class="pill warn">Draft</span>'):'<span class="pill">Belum dibuat</span>'}</div>${b?.doc_number?`<div class="muted" style="margin-top:7px">${esc(b.doc_number)} • ${dateID(b.bast_date)}</div>`:''}<div class="detail-actions" style="margin-top:12px"><button class="btn ${b?'ghost':'primary'} small" data-action="open-bast" data-id="${id}" data-type="${type}">${b?'Buka / Edit':'Buat BAST'}</button>${b?`<button class="btn ghost small" data-action="print-bast" data-bast-id="${b.id}">Preview / Print</button><button class="btn primary small" data-action="download-bast" data-bast-id="${b.id}">Download PDF</button>`:''}</div></div>`}
 function fileGrid(files){return files.length?`<div class="file-grid">${files.map(f=>`<div class="file-card"><div id="fileprev-${f.id}" class="file-preview">${f.mime_type?.startsWith('image/')?'Memuat...':'PDF / FILE'}</div><div class="file-meta"><strong title="${esc(f.file_name)}">${esc(f.file_name)}</strong><span>${esc(f.caption||'Tanpa caption')} • ${new Date(f.created_at).toLocaleString('id-ID')}</span></div><div class="file-actions"><button class="btn ghost small" data-action="open-file" data-id="${f.id}">Buka</button><button class="btn danger small" data-action="delete-file" data-id="${f.id}">Hapus</button></div></div>`).join('')}</div>`:empty('Belum ada file.')}
 async function hydrateFilePreviews(files){for(const f of files.filter(x=>x.mime_type?.startsWith('image/'))){const el=$(`#fileprev-${CSS.escape(f.id)}`);if(!el)continue;const {data}=await db.storage.from(BUCKET).createSignedUrl(f.storage_path,3600);if(data?.signedUrl)el.outerHTML=`<img src="${data.signedUrl}" alt="${esc(f.file_name)}">`}}
 
-function openTransaction(id){const f=$('#transactionForm');f.reset();f.elements.project_id.value=id;f.elements.tx_date.value=today();toggleTxCategory();$('#transactionDialog').showModal()}
-function toggleTxCategory(){const expense=$('#txType').value==='expense';$('#expenseCategoryLabel').classList.toggle('hidden',!expense);$('#incomeCategoryLabel').classList.toggle('hidden',expense)}
+let editingTransaction=null;
+let transactionSaving=false;
+const deletingTransactions=new Set();
+function transactionActions(x){
+  if(x.type==='distribution')return '<span class="muted">Riwayat bagi hasil</span>';
+  const p=projectById(x.project_id);
+  if(!p||p.finance_closed_at||p._rrInvalid)return '<span class="muted">Terkunci</span>';
+  return '<div class="transaction-actions"><button type="button" class="btn ghost small" data-action="edit-tx" data-id="'+esc(x.id)+'">Edit</button><button type="button" class="btn danger small" data-action="delete-tx" data-id="'+esc(x.id)+'">Hapus</button></div>';
+}
+function openTransaction(id,tx=null){
+  const p=projectById(id);
+  if(!p||p.finance_closed_at||p._rrInvalid){alert('Transaksi proyek ini terkunci atau tidak dapat dibaca.');return}
+  const f=$('#transactionForm');f.reset();editingTransaction=tx?{...tx}:null;
+  f.elements.project_id.value=id;f.elements.tx_date.value=today();
+  const cat=f.elements.expense_category;
+  [...cat.options].filter(o=>o.dataset.legacy==='true').forEach(o=>o.remove());
+  if(tx){
+    if(tx.expense_category&&![...cat.options].some(o=>o.value===tx.expense_category)){
+      const opt=document.createElement('option');opt.value=tx.expense_category;opt.textContent=tx.expense_category;opt.dataset.legacy='true';cat.append(opt);
+    }
+    for(const k of ['type','tx_date','income_category','expense_category','amount','description']){
+      if(tx[k]!=null)f.elements[k].value=tx[k];
+    }
+  }
+  $('#transactionDialogTitle').textContent=tx?'Edit Transaksi':'Tambah Transaksi';
+  f.querySelector('[type=submit]').textContent=tx?'Simpan Perubahan':'Simpan';
+  toggleTxCategory();$('#transactionDialog').showModal();
+}
+function openEditTransaction(id){
+  const tx=state.transactions.find(x=>x.id===id);
+  if(!tx){alert('Transaksi tidak ditemukan. Muat ulang data.');return}
+  openTransaction(tx.project_id,tx);
+}
+function toggleTxCategory(){
+  const expense=$('#txType').value==='expense';
+  $('#expenseCategoryLabel').classList.toggle('hidden',!expense);
+  $('#incomeCategoryLabel').classList.toggle('hidden',expense);
+}
 $('#txType').onchange=toggleTxCategory;
-$('#transactionForm').onsubmit=async e=>{e.preventDefault();const fd=Object.fromEntries(new FormData(e.currentTarget).entries());if(projectById(fd.project_id)?.finance_closed_at){alert('Keuangan proyek sudah ditutup. Transaksi operasional tidak bisa ditambah.');return}fd.amount=Number(fd.amount);fd.expense_category=fd.type==='expense'?fd.expense_category:null;fd.income_category=fd.type==='income'?(fd.income_category||null):null;fd.created_by=session.user.id;try{await rrRequireOpen(fd.project_id);const {error}=await db.from('transactions').insert(fd);if(error)throw error;$('#transactionDialog').close();await refresh();toast('Transaksi tersimpan')}catch(err){alert('Gagal menyimpan transaksi: '+err.message)}};
+function matchTransactionSnapshot(q,tx){
+  for(const key of ['project_id','type','tx_date','income_category','expense_category','amount','description']){
+    const value=tx[key];q=value==null?q.is(key,null):q.eq(key,value);
+  }
+  return q;
+}
+function transactionPayload(fd){
+  const amount=Number(fd.amount),description=String(fd.description??'').trim();
+  if(!['income','expense'].includes(fd.type))throw Error('Jenis transaksi tidak valid.');
+  if(!Number.isSafeInteger(amount)||amount<=0)throw Error('Nominal harus berupa rupiah bulat lebih dari nol.');
+  if(!fd.tx_date||!description)throw Error('Tanggal dan keterangan wajib diisi.');
+  if(fd.type==='expense'&&!fd.expense_category)throw Error('Pilih kategori pengeluaran.');
+  return {type:fd.type,tx_date:fd.tx_date,amount,description,
+    expense_category:fd.type==='expense'?fd.expense_category:null,
+    income_category:fd.type==='income'?(String(fd.income_category??'').trim()||null):null};
+}
+async function reloadAfterTransaction(message){
+  try{await refresh();toast(message)}catch(err){alert(message+', tetapi pemuatan ulang gagal. Refresh halaman sebelum menginput transaksi lagi.')}
+}
+$('#transactionForm').onsubmit=async e=>{
+  e.preventDefault();if(transactionSaving)return;
+  const form=e.currentTarget,fd=Object.fromEntries(new FormData(form).entries()),old=editingTransaction;
+  const projectId=old?old.project_id:fd.project_id;
+  if(!projectId)return alert('Proyek tidak ditemukan.');
+  const button=form.querySelector('[type=submit]');
+  transactionSaving=true;button.disabled=true;
+  try{
+    const payload=transactionPayload(fd);
+    await rrRequireOpen(projectId);
+    if(old){
+      const {data,error}=await matchTransactionSnapshot(db.from('transactions').update(payload).eq('id',old.id),old).select('id');
+      if(error)throw error;
+      if(!data?.length)throw Error('Transaksi berubah, sudah dihapus, atau izin edit tidak tersedia. Muat ulang data.');
+    }else{
+      const {error}=await db.from('transactions').insert({...payload,project_id:projectId,created_by:session.user.id});
+      if(error)throw error;
+    }
+    $('#transactionDialog').close();editingTransaction=null;
+    await reloadAfterTransaction(old?'Transaksi berhasil diperbarui':'Transaksi tersimpan');
+  }catch(err){alert('Gagal menyimpan transaksi: '+err.message)}
+  finally{transactionSaving=false;button.disabled=false}
+};
+async function deleteTransaction(id){
+  if(deletingTransactions.has(id))return;
+  const tx=state.transactions.find(x=>x.id===id);
+  if(!tx)return alert('Transaksi tidak ditemukan. Muat ulang data.');
+  const p=projectById(tx.project_id);
+  if(!p||p.finance_closed_at||p._rrInvalid)return alert('Transaksi proyek ini terkunci.');
+  if(!confirm('Hapus transaksi ini secara permanen?\n\nProyek: '+p.name+'\nTanggal: '+dateID(tx.tx_date)+'\nKeterangan: '+tx.description+'\nNominal: '+money(tx.amount)+'\n\nSaldo, biaya, laba, dan sisa tagihan akan dihitung ulang. Dokumen yang sudah diterbitkan tidak otomatis diubah.'))return;
+  deletingTransactions.add(id);
+  try{
+    await rrRequireOpen(tx.project_id);
+    const {data,error}=await matchTransactionSnapshot(db.from('transactions').delete().eq('id',id),tx).select('id');
+    if(error)throw error;
+    if(!data?.length)throw Error('Transaksi berubah, sudah dihapus, atau izin hapus tidak tersedia. Muat ulang data.');
+    await reloadAfterTransaction('Transaksi berhasil dihapus');
+  }catch(err){alert('Gagal menghapus transaksi: '+err.message)}
+  finally{deletingTransactions.delete(id)}
+}
 
 function openProgress(id){const f=$('#progressForm');f.reset();f.elements.project_id.value=id;f.elements.progress_date.value=today();f.elements.stage.value=projectById(id)?.status==='Hold'?'Pengajuan':projectById(id)?.status||'Pengajuan';updateProgressWarning();$('#progressDialog').showModal()}
 $('#progressForm').elements.stage.onchange=updateProgressWarning;
@@ -427,6 +521,8 @@ document.addEventListener('click',async e=>{
   if(a.dataset.action==='open-project'){renderProjectDetail(id);$('#projectDetailDialog').showModal()}
   if(a.dataset.action==='edit-project')openProjectForm(id);
   if(a.dataset.action==='add-tx')openTransaction(id);
+  if(a.dataset.action==='edit-tx')openEditTransaction(id);
+  if(a.dataset.action==='delete-tx')await deleteTransaction(id);
   if(a.dataset.action==='add-work-item')openWorkItemDialog(id);
   if(a.dataset.action==='edit-work-item')openWorkItemDialog(id,a.dataset.workId);
   if(a.dataset.action==='delete-work-item')deleteWorkItem(a.dataset.workId);
